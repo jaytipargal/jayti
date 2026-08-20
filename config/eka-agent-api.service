@@ -1,0 +1,15 @@
+[Unit]
+Description=EKA Agent Central API Server
+After=network.target postgresql.service
+
+[Service]
+Type=simple
+User=root
+ExecStart=/root/eka_venv/bin/uvicorn eka_agent_server:app --host 0.0.0.0 --port 8443
+WorkingDirectory=/root
+Restart=always
+RestartSec=5
+Environment=PYTHONUNBUFFERED=1
+
+[Install]
+WantedBy=multi-user.target

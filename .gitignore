@@ -1,0 +1,47 @@
+# Environment files
+.env
+.env.*
+*.env
+
+# Credential files
+*.json
+serviceAccountKey.json
+*_credentials.json
+*_secrets.json
+
+# SSH keys
+*.pem
+*.key
+id_rsa*
+id_ed25519*
+*.ppk
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+
+# Config directories with secrets
+.config/
+
+# Secret files
+*secret*
+*credential*
+*password*
+*api_key*
+*token*
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
