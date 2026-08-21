@@ -1,0 +1,17 @@
+[Unit]
+Description=EKA Agent Retrieval Server (FAISS)
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/eka-agent
+Environment=OMP_NUM_THREADS=2
+Environment=TOKENIZERS_PARALLELISM=false
+ExecStart=/opt/eka-agent/venv/bin/python /opt/eka-agent/eka_retrieval_server_vps.py
+Restart=on-failure
+RestartSec=10
+MemoryMax=3G
+
+[Install]
+WantedBy=multi-user.target

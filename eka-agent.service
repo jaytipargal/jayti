@@ -1,0 +1,18 @@
+[Unit]
+Description=EKA Agent Cloud LLM Server (Claude API)
+After=network.target eka-retrieval.service
+Wants=eka-retrieval.service
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/eka-agent
+Environment=ANTHROPIC_API_KEY=%ANTHROPIC_KEY%
+Environment=RETRIEVAL_URL=http://localhost:8100
+Environment=ANTHROPIC_MODEL=claude-sonnet-4-20250514
+ExecStart=/opt/eka-agent/venv/bin/python /opt/eka-agent/eka_agent_cloud.py
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
