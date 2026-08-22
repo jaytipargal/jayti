@@ -21,7 +21,7 @@
 #   echo 'export EKA_AGENT_URL="https://api.eka-ai.in"' >> ~/.bashrc
 # ============================================================
 
-EKA_AGENT_URL="${EKA_AGENT_URL:-http://139.84.165.81}"
+EKA_AGENT_URL="${EKA_AGENT_URL:-https://agent.urgaa.in}"
 
 if [ $# -lt 1 ]; then
     echo "EKA Agent Client"
@@ -80,11 +80,11 @@ fi
 # ── Search-only mode (retrieval server directly) ──
 if [ "$SEARCH_ONLY" = true ]; then
     if [ "$JSON_OUTPUT" = true ]; then
-        curl -s -X POST "${EKA_AGENT_URL}:8100/search" \
+        curl -s -X POST "${EKA_AGENT_URL}/retrieval/search" \
             -H "Content-Type: application/json" \
             -d "{\"query\": \"${QUERY}\", \"top_k\": ${TOP_K}}"
     else
-        curl -s -X POST "${EKA_AGENT_URL}:8100/search" \
+        curl -s -X POST "${EKA_AGENT_URL}/retrieval/search" \
             -H "Content-Type: application/json" \
             -d "{\"query\": \"${QUERY}\", \"top_k\": ${TOP_K}}" | \
             python3 -c "
@@ -102,7 +102,7 @@ for i, hit in enumerate(data['hits'], 1):
     doc = hit['document'][:500]
     print(f'    Text: {doc}...' if len(hit['document']) > 500 else f'    Text: {doc}')
     print()
-" 2>/dev/null || curl -s -X POST "${EKA_AGENT_URL}:8100/search" \
+" 2>/dev/null || curl -s -X POST "${EKA_AGENT_URL}/retrieval/search" \
             -H "Content-Type: application/json" \
             -d "{\"query\": \"${QUERY}\", \"top_k\": ${TOP_K}}"
     fi
@@ -114,7 +114,7 @@ PAYLOAD="{\"query\": \"${QUERY}\", \"top_k\": ${TOP_K}, \"use_rag\": ${USE_RAG}}
 
 # ── Stream mode ──
 if [ "$STREAM_MODE" = true ]; then
-    curl -N -X POST "${EKA_AGENT_URL}:8000/query/stream" \
+    curl -N -X POST "${EKA_AGENT_URL}/agent/query/stream" \
         -H "Content-Type: application/json" \
         -d "${PAYLOAD}" 2>/dev/null | while IFS= read -r line; do
         if echo "$line" | grep -q '^data: '; then
@@ -135,9 +135,9 @@ fi
 
 # ── Raw mode ──
 if [ "$RAW_MODE" = true ]; then
-    ENDPOINT="${EKA_AGENT_URL}:8000/raw"
+    ENDPOINT="${EKA_AGENT_URL}/agent/raw"
 else
-    ENDPOINT="${EKA_AGENT_URL}:8000/query"
+    ENDPOINT="${EKA_AGENT_URL}/agent/query"
 fi
 
 # ── Normal query ──
