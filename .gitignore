@@ -23,6 +23,13 @@ __pycache__/
 *.pyd
 .Python
 *.egg-info/
+
+# Test / coverage artifacts
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
 dist/
 build/
 
@@ -35,6 +42,9 @@ build/
 *password*
 *api_key*
 *token*
+# ...but the redaction pipeline's source code is not a secret — keep it tracked.
+!scripts/eka_scan_secrets.py
+!tests/test_redact.py
 
 # OS files
 .DS_Store
