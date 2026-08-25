@@ -1,4 +1,4 @@
-# EKA Agent — Central Ingestion & Continuous Learning System
+# Jayti Agent — Central Ingestion & Continuous Learning System
 
 A multi-device data ingestion, training, and correlation system for building a private AI agent. Devices push delta data to a central PostgreSQL database on a Vultr VPS; the main PC pulls, processes, creates training chunks, runs LoRA fine-tuning, and updates a vector database.
 
