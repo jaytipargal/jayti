@@ -167,9 +167,13 @@ def index_chunks(start_line=0, count=None, batch_size=50):
     print(f"  Total in DB: {state['total_indexed']:,}")
     print(f"  Last indexed line: {current_line:,}")
 
-    return indexed
+    return {
+        "indexed_this_run": indexed,
+        "total_in_db": state['total_indexed'],
+        "last_indexed_line": current_line,
+    }
 
-def search(query, n_results=10):
+def search(query, n_results=10, json_mode=False):
     """Search the vector DB."""
     collection = get_collection()
     results = collection.query(
@@ -177,41 +181,67 @@ def search(query, n_results=10):
         n_results=n_results
     )
 
-    print(f"\n=== Search Results for: '{query}' ===")
-    print(f"  Found {len(results['ids'][0])} results:\n")
-
+    items = []
     for i, (doc_id, doc, meta, dist) in enumerate(zip(
         results["ids"][0],
         results["documents"][0],
         results["metadatas"][0],
         results["distances"][0]
     )):
-        print(f"  {i+1}. [{meta.get('category','?')}] {meta.get('title','?')[:80]}")
-        print(f"     Distance: {dist:.4f}")
-        print(f"     ID: {meta.get('chunk_id','?')}")
-        print(f"     Priority: {meta.get('priority','?')}")
-        print(f"     Device: {meta.get('source_device','?')}")
-        print(f"     Preview: {doc[:200]}...")
-        print()
+        items.append({
+            "rank": i + 1,
+            "category": meta.get('category','?'),
+            "title": meta.get('title','?')[:80],
+            "distance": round(dist, 4),
+            "chunk_id": meta.get('chunk_id','?'),
+            "priority": meta.get('priority','?'),
+            "device": meta.get('source_device','?'),
+            "preview": doc[:200],
+        })
 
-def stats():
+    if json_mode:
+        print(json.dumps({"query": query, "results": items}, ensure_ascii=False))
+    else:
+        print(f"\n=== Search Results for: '{query}' ===")
+        print(f"  Found {len(results['ids'][0])} results:\n")
+        for item in items:
+            print(f"  {item['rank']}. [{item['category']}] {item['title']}")
+            print(f"     Distance: {item['distance']}")
+            print(f"     ID: {item['chunk_id']}")
+            print(f"     Priority: {item['priority']}")
+            print(f"     Device: {item['device']}")
+            print(f"     Preview: {item['preview']}...")
+            print()
+
+def stats(json_mode=False):
     """Show vector DB stats."""
     collection = get_collection()
     count = collection.count()
     state = get_state()
 
-    print(f"\n=== Vector DB Stats ===")
-    print(f"  Collection: {COLLECTION_NAME}")
-    print(f"  Location: {VECTOR_DB_DIR}")
-    print(f"  Documents indexed: {count:,}")
-    print(f"  Last indexed line: {state.get('last_indexed_line', 0):,}")
-    print(f"  Total indexed (all time): {state.get('total_indexed', 0):,}")
-
-    # Training file line count
     with open(TRAINING_FILE, "r", encoding="utf-8", errors="replace") as f:
         total_lines = sum(1 for _ in f)
-    print(f"  Training file lines: {total_lines:,}")
-    print(f"  Coverage: {(count / total_lines * 100):.1f}%")
+    data = {
+        "collection": COLLECTION_NAME,
+        "location": VECTOR_DB_DIR,
+        "documents_indexed": count,
+        "last_indexed_line": state.get('last_indexed_line', 0),
+        "total_indexed_all_time": state.get('total_indexed', 0),
+        "training_file_lines": total_lines,
+        "coverage_percent": round((count / total_lines * 100), 1) if total_lines else 0,
+    }
+    if json_mode:
+        print(json.dumps(data, ensure_ascii=False))
+    else:
+        print(f"\n=== Vector DB Stats ===")
+        print(f"  Collection: {COLLECTION_NAME}")
+        print(f"  Location: {VECTOR_DB_DIR}")
+        print(f"  Documents indexed: {count:,}")
+        print(f"  Last indexed line: {state.get('last_indexed_line', 0):,}")
+        print(f"  Total indexed (all time): {state.get('total_indexed', 0):,}")
+        print(f"  Training file lines: {total_lines:,}")
+        print(f"  Coverage: {(count / total_lines * 100):.1f}%")
+    return data
 
 # ─── MAIN ───
 def main():
@@ -222,6 +252,7 @@ def main():
     parser.add_argument("--index-new", action="store_true", help="Index only new chunks since last index")
     parser.add_argument("--search", metavar="QUERY", help="Search the vector DB")
     parser.add_argument("--stats", action="store_true", help="Show DB stats")
+    parser.add_argument("--json", action="store_true", help="Emit result as JSON")
     args = parser.parse_args()
 
     if args.setup:
@@ -247,10 +278,10 @@ def main():
         index_chunks(batch_size=50)
 
     elif args.search:
-        search(args.search)
+        search(args.search, json_mode=args.json)
 
     elif args.stats:
-        stats()
+        stats(json_mode=args.json)
 
     else:
         parser.print_help()
