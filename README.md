@@ -84,9 +84,28 @@ sudo cp nginx/sites/agent.jaytipargal.tech.conf /etc/nginx/sites-available/jayti
 sudo ln -s /etc/nginx/sites-available/jaytipargal-agent /etc/nginx/sites-enabled/
 sudo certbot certonly --nginx -d agent.jaytipargal.tech
 sudo nginx -t && sudo systemctl reload nginx
+
+# 6. Cloud agent + FAISS retrieval (RAG) on 127.0.0.1:8000 / :8100
+#    Agent (Claude) — key read from a root-only EnvironmentFile, never inline:
+sudo mkdir -p /opt/eka-agent && sudo cp eka_agent_cloud.py eka_retrieval_server_vps.py build_index.py /opt/eka-agent/
+sudo /opt/eka-agent/venv/bin/pip install fastapi uvicorn pydantic      # agent venv (light)
+sudo install -d -m 700 /etc/eka-agent
+echo 'ANTHROPIC_API_KEY=sk-ant-...' | sudo tee /etc/eka-agent/agent.env >/dev/null && sudo chmod 600 /etc/eka-agent/agent.env
+sudo cp eka-agent.service /etc/systemd/system/ && sudo systemctl enable --now eka-agent
+
+#    Retrieval — a SEPARATE venv (torch is heavy; keep it out of the agent venv).
+#    /tmp is a small tmpfs, so build torch elsewhere; install CPU torch first.
+sudo python3 -m venv /opt/eka-agent/retrieval-venv
+sudo TMPDIR=/var/tmp /opt/eka-agent/retrieval-venv/bin/pip install --no-cache-dir \
+     --index-url https://download.pytorch.org/whl/cpu torch
+sudo TMPDIR=/var/tmp /opt/eka-agent/retrieval-venv/bin/pip install --no-cache-dir -r requirements-retrieval.txt
+#    Build the index from a doc_store.jsonl of {id, document, metadata, line}:
+#      /opt/eka-agent/faiss_index/doc_store.jsonl  ->  build_index.py  ->  faiss_index.bin + index_meta.json
+sudo /opt/eka-agent/retrieval-venv/bin/python /opt/eka-agent/build_index.py
+sudo cp eka-retrieval.service /etc/systemd/system/ && sudo systemctl enable --now eka-retrieval
 ```
 
-`/agent/*` and `/retrieval/*` require the `X-API-Key` from `eka-agent-api-key.conf`; the same key is `AGENT_API_KEY` in the jayti-dashboard Vercel project and `EKA_API_KEY` for `eka_client.sh`. DNS for `agent.jaytipargal.tech` (A/AAAA → the VPS) lives in Vercel DNS.
+`/agent/*` and `/retrieval/*` require the `X-API-Key` from `eka-agent-api-key.conf`; the same key is `AGENT_API_KEY` in the jayti-dashboard Vercel project and `EKA_API_KEY` for `eka_client.sh`. DNS for `agent.jaytipargal.tech` (A/AAAA → the VPS) lives in Vercel DNS. Register each device on the hub with `scripts/eka_register_device.sh <id>` (run on the VPS; prints a one-time `device.env`).
 
 ### 2. Device Setup
 

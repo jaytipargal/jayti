@@ -1,0 +1,24 @@
+# Retrieval server deps (eka_retrieval_server_vps.py) — installed in a SEPARATE
+# venv from the agent (/opt/eka-agent/retrieval-venv), pinned to what runs on
+# the VPS. Python 3.14 has wheels for all of these.
+#
+# torch is the CPU build; install it from the CPU index so it doesn't drag in
+# ~2GB of unused CUDA libraries:
+#   pip install --index-url https://download.pytorch.org/whl/cpu torch
+# then the rest from PyPI:
+#   pip install -r requirements-retrieval.txt
+#
+# Gotcha: /tmp on the VPS is a 1.7G tmpfs; pip must build torch elsewhere:
+#   TMPDIR=/var/tmp pip install --no-cache-dir ...
+faiss-cpu==1.15.1
+sentence-transformers==6.0.1
+torch==2.14.0+cpu
+transformers==5.17.0
+tokenizers==0.23.2
+safetensors==0.8.0
+scikit-learn==1.9.1
+scipy==1.18.1
+numpy==2.5.3
+fastapi==0.141.1
+uvicorn==0.53.0
+pydantic==2.13.5
