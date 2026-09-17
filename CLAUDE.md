@@ -27,7 +27,7 @@ The repo was renamed "EKA Agent" → "Jayti Agent" in the README only; code, ser
 Devices → VPS → main PC, run on a nightly schedule (cron / Windows Task Scheduler via `setup_windows_tasks.bat`):
 
 - `eka_agent_push.py` — runs on each of 6 devices (S24/Termux, Windows PCs, drive backup, birthday-site server). One `collect_<device_name>(last_sync)` function per device; selected with `--device` (`--dry-run` collects without pushing). Pushes deltas to `POST /ingest`.
-- `eka_agent_server.py` — FastAPI on the VPS (port 8443 behind nginx at `agent.urgaa.in`), PostgreSQL with 6 tables created by `setup_vps_db.sh`. Every data endpoint goes through `verify_api_key` (`X-API-Key` header). Dedup is by SHA-256 `content_hash` (unique violation → counted as duplicate).
+- `eka_agent_server.py` — the original ingestion API (PostgreSQL, 6 tables from `setup_vps_db.sh`, `verify_api_key`, SHA-256 `content_hash` dedup). **Not what runs in production:** the VPS serves ingestion from `server/jayti-hub/` (Jayti Hub, 127.0.0.1:8443, per-device `X-Device-Id` + `X-Api-Key` checked against an `api_keys` table). `config/eka-agent-api.service` also binds 8443 and must stay disabled.
 - `eka_agent_pull.py` — main PC: `GET /pull` → save per-device JSONL under a dated ingestion dir → `POST /pull/mark` → turn items into input/output training chunks → trigger training/vector update → report to `/training/status` and `/audit`.
 - `eka_train.py` — LoRA fine-tuning (GPT-2 base) on a day's chunks, dated adapters with `--list-adapters` / `--rollback DATE`.
 - `eka_vector_db.py` — ChromaDB indexing of the training JSONL with resumable state (`last_indexed_line`); supports `--json` output.
@@ -40,7 +40,16 @@ Two-process design: a FAISS retrieval server on :8100 and an agent server on :80
 
 - Retrieval: `scripts/eka_retrieval_server.py` (local Windows, `D:\training-data\faiss_index`) and `eka_retrieval_server_vps.py` (VPS, `/opt/eka-agent/faiss_index`) are near-duplicates differing mainly in paths/thread counts — change both. ~1.15M docs, `all-MiniLM-L6-v2` 384-dim `IndexFlatIP`. To stay within 3.8 GB RAM the doc store is **not** loaded: `doc_offsets.bin` holds int64 byte offsets into `doc_store.jsonl`, and docs are read by seeking.
 - Generation: `eka_agent_cloud.py` (VPS, Anthropic Messages API, key from `ANTHROPIC_API_KEY`, model from `ANTHROPIC_MODEL`) vs `scripts/eka_agent_deploy.py` (local LoRA-tuned Qwen2.5-0.5B). Both expose `/health`, `/query`, `/query/stream` (SSE), `/raw`.
-- Deployment: `eka-agent.service` / `eka-retrieval.service` (systemd, `/opt/eka-agent/venv`), `nginx-eka-agent.conf` maps `/agent/*` and `/retrieval/*`; `eka_client.sh` is the curl-based client described in `DEPLOYMENT_GUIDE.md`.
+- Deployment: `eka-agent.service` / `eka-retrieval.service` (systemd, `/opt/eka-agent/venv`). `eka_client.sh` is the curl-based client described in `DEPLOYMENT_GUIDE.md`; it sends `X-API-Key` from `EKA_API_KEY`.
+
+### VPS / nginx (`nginx/`, `server/`)
+
+The files under `nginx/` and `server/` mirror what is deployed on the VPS, so change them here first and then copy them over. Line endings are pinned to LF in `.gitattributes`. `agent.jaytipargal.tech` (primary; DNS in Vercel) and `agent.urgaa.in` (legacy alias) both include `nginx/snippets/eka-agent-locations.conf`:
+- `/` goes to Jayti Hub on :8443.
+- `/retrieve/` goes to jayti-retrieval on :8444, which authenticates each device itself.
+- `/retrieval/` goes to :8100 and `/agent/` to :8000. Both require an `X-API-Key` matching the `map` in `/etc/nginx/conf.d/eka-agent-api-key.conf`, which lives only on the server; only an example is committed. The same key is `AGENT_API_KEY` in the jayti-dashboard Vercel project (jpbir repo). The `/health` routes need no key.
+
+ufw allows only ports 22, 80 and 443.
 
 ### Corpus redaction
 
