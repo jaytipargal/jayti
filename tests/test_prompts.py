@@ -14,13 +14,13 @@ def test_system_prompt_includes_context_when_present():
     prompt = eka_agent_cloud.build_system_prompt("chunk-1\nchunk-2")
     assert "chunk-1" in prompt
     assert "Knowledge Context:" in prompt
-    assert "forensic intelligence assistant" in prompt
+    assert "JAYTI AGENT" in prompt
 
 
 def test_system_prompt_omits_context_when_none():
     prompt = eka_agent_cloud.build_system_prompt(None)
     assert "Knowledge Context:" not in prompt
-    assert "forensic intelligence assistant" in prompt
+    assert "JAYTI AGENT" in prompt
 
 
 def test_system_prompt_omits_context_on_sentinel():

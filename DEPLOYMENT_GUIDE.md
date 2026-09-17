@@ -10,13 +10,14 @@ Once Termux is reinstalled, run these commands on the phone:
 pkg install curl -y
 
 # 2. Download the client
-curl -o ~/eka_client.sh https://agent.urgaa.in/eka_client.sh
+curl -o ~/eka_client.sh https://agent.jaytipargal.tech/eka_client.sh
 
 # 3. Make executable
 chmod +x ~/eka_client.sh
 
 # 4. Add to PATH (optional — add to ~/.bashrc)
-echo 'export PATH=$PATH:~/EKA_AGENT_URL=https://agent.urgaa.in' >> ~/.bashrc
+echo 'export EKA_AGENT_URL=https://agent.jaytipargal.tech' >> ~/.bashrc
+echo 'export EKA_API_KEY=<key>' >> ~/.bashrc   # required for /agent and /retrieval
 source ~/.bashrc
 
 # 5. Test
@@ -27,7 +28,7 @@ source ~/.bashrc
 
 ```bash
 # 1. Download
-curl -o ~/eka_client.sh https://agent.urgaa.in/eka_client.sh
+curl -o ~/eka_client.sh https://agent.jaytipargal.tech/eka_client.sh
 chmod +x ~/eka_client.sh
 
 # 2. Query
@@ -44,22 +45,25 @@ chmod +x ~/eka_client.sh
 
 ## Public API Endpoints
 
+`/agent/*` and `/retrieval/*` require an `X-API-Key` header (nginx check); the two `/health` routes are open. `agent.urgaa.in` still serves the same routes as a legacy alias.
+
 | Endpoint | URL | Description |
 |----------|-----|-------------|
-| Agent Health | `https://agent.urgaa.in/agent/health` | Server status |
-| Agent Query | `https://agent.urgaa.in/agent/query` | RAG + Claude LLM |
-| Agent Stream | `https://agent.urgaa.in/agent/query/stream` | Streaming SSE |
-| Agent Raw | `https://agent.urgaa.in/agent/raw` | Direct LLM (no RAG) |
-| Retrieval Health | `https://agent.urgaa.in/retrieval/health` | FAISS index status |
-| Retrieval Search | `https://agent.urgaa.in/retrieval/search` | Semantic search |
-| Retrieval Augment | `https://agent.urgaa.in/retrieval/augment` | RAG context formatting |
-| Client Script | `https://agent.urgaa.in/eka_client.sh` | Download client |
+| Agent Health | `https://agent.jaytipargal.tech/agent/health` | Server status |
+| Agent Query | `https://agent.jaytipargal.tech/agent/query` | RAG + Claude LLM |
+| Agent Stream | `https://agent.jaytipargal.tech/agent/query/stream` | Streaming SSE |
+| Agent Raw | `https://agent.jaytipargal.tech/agent/raw` | Direct LLM (no RAG) |
+| Retrieval Health | `https://agent.jaytipargal.tech/retrieval/health` | FAISS index status |
+| Retrieval Search | `https://agent.jaytipargal.tech/retrieval/search` | Semantic search |
+| Retrieval Augment | `https://agent.jaytipargal.tech/retrieval/augment` | RAG context formatting |
+| Client Script | `https://agent.jaytipargal.tech/eka_client.sh` | Download client |
 
 ## curl Example (no client script needed)
 
 ```bash
-curl -X POST https://agent.urgaa.in/agent/query \
+curl -X POST https://agent.jaytipargal.tech/agent/query \
   -H "Content-Type: application/json" \
+  -H "X-API-Key: $EKA_API_KEY" \
   -d '{"query": "What data was found?", "top_k": 5, "max_tokens": 512}'
 ```
 

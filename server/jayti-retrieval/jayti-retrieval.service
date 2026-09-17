@@ -1,0 +1,16 @@
+[Unit]
+Description=Jayti Retrieval API (FAISS + MiniLM)
+After=network.target postgresql.service
+
+[Service]
+Type=simple
+EnvironmentFile=/etc/jayti/retrieval.env
+ExecStart=/opt/jayti/hub/venv/bin/python -m uvicorn retrieval_server:app \
+    --host 127.0.0.1 --port 8444 --workers 1
+WorkingDirectory=/opt/jayti/retrieval
+Restart=on-failure
+RestartSec=10
+User=root
+
+[Install]
+WantedBy=multi-user.target

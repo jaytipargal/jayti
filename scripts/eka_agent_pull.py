@@ -23,7 +23,7 @@ from datetime import datetime, timezone, date
 from pathlib import Path
 
 # ─── Config ───
-VPS_URL = "https://agent.urgaa.in"
+VPS_URL = "https://agent.jaytipargal.tech"
 API_KEY = "YOUR_API_KEY_HERE"
 TRAINING_FILE = r"D:\training-data\agent_training_chunks_with_learning.jsonl"
 INGESTION_DIR = r"D:\training-data\daily_ingestion"

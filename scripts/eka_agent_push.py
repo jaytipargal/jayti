@@ -25,7 +25,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 # ─── Config ───
-VPS_URL = "https://agent.urgaa.in"
+VPS_URL = "https://agent.jaytipargal.tech"
 API_KEY = "YOUR_API_KEY_HERE"
 LAST_SYNC_FILE = "/etc/eka_agent/last_sync"  # or ~/.eka_agent/last_sync on Windows
 STATE_DIR = os.path.expanduser("~/.eka_agent")

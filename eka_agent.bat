@@ -6,7 +6,7 @@ REM        eka_agent.bat "query" --raw
 
 setlocal
 
-set EKA_AGENT_URL=https://agent.urgaa.in
+set EKA_AGENT_URL=https://agent.jaytipargal.tech
 
 if "%~1"=="" (
     echo EKA Agent Client (Windows)

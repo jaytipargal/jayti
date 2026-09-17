@@ -9,7 +9,7 @@
 
 DEVICE=$1
 SCRIPT_DIR="/opt/eka_agent"
-VPS_URL="https://agent.urgaa.in"
+VPS_URL="https://agent.jaytipargal.tech"
 API_KEY="YOUR_API_KEY_HERE"
 
 if [ -z "$DEVICE" ]; then

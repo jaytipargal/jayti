@@ -1,0 +1,8 @@
+# Installed as /etc/nginx/conf.d/eka-agent-api-key.conf (mode 600). Never commit the real file.
+# Generate the key with: openssl rand -hex 32
+# The same value goes in Vercel (jayti-dashboard) as AGENT_API_KEY and in clients as EKA_API_KEY.
+map_hash_bucket_size 128;
+map $http_x_api_key $eka_agent_key_ok {
+    default 0;
+    "REPLACE_WITH_64_HEX_CHARS" 1;
+}
