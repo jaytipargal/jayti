@@ -70,7 +70,11 @@ def push_items(items, device):
         "-H", f"X-API-Key: {API_KEY}",
         "-d", f"@{payload_file}"
     ]
-    result = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
+    try:
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
+    finally:
+        # Clean up payload file
+        os.remove(payload_file)
 
     try:
         response = json.loads(result.stdout)
@@ -81,9 +85,6 @@ def push_items(items, device):
     except json.JSONDecodeError:
         print(f"  [{device}] Push ERROR: {result.stdout[:200]}")
         return {"inserted": 0, "duplicates": 0, "errors": 1}
-
-    # Clean up payload file
-    os.remove(payload_file)
 
 # ─── Device Collectors ───
 

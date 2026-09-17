@@ -72,6 +72,14 @@ def today_str():
 def now_iso():
     return datetime.now(timezone.utc).isoformat()
 
+def _parse_vps_response(endpoint, result):
+    """Decode curl stdout as JSON; return {} (callers use .get) if curl failed or returned non-JSON."""
+    try:
+        return json.loads(result.stdout)
+    except json.JSONDecodeError:
+        print(f"  VPS {endpoint} ERROR: bad response {result.stdout[:200]!r} {result.stderr[:200]!r}")
+        return {}
+
 def vps_get(endpoint, params=None):
     """GET request to VPS API."""
     url = f"{VPS_URL}{endpoint}"
@@ -79,7 +87,7 @@ def vps_get(endpoint, params=None):
         url += "?" + "&".join(f"{k}={v}" for k, v in params.items())
     cmd = ["curl", "-s", url, "-H", f"X-API-Key: {API_KEY}"]
     result = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
-    return json.loads(result.stdout)
+    return _parse_vps_response(endpoint, result)
 
 def vps_post(endpoint, payload):
     """POST request to VPS API."""
@@ -91,9 +99,11 @@ def vps_post(endpoint, payload):
            "-H", "Content-Type: application/json",
            "-H", f"X-API-Key: {API_KEY}",
            "-d", f"@{payload_file}"]
-    result = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
-    os.remove(payload_file)
-    return json.loads(result.stdout)
+    try:
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
+    finally:
+        os.remove(payload_file)
+    return _parse_vps_response(endpoint, result)
 
 def compute_hash(content):
     return hashlib.sha256(json.dumps(content, sort_keys=True, default=str).encode()).hexdigest()
