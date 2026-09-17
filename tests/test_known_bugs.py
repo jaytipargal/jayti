@@ -1,9 +1,8 @@
-"""Tests that document real defects found during the coverage audit.
+"""Regression tests for defects found during the coverage audit (PR #1).
 
-Each asserts the *intended* behavior and is marked xfail(strict=True): it fails
-today (proving the bug) and will flip to a passing test the moment the bug is
-fixed — at which point the xfail marker should be removed. See the PR body for
-the catalogue of findings.
+Each asserts the intended behavior. They were xfail(strict=True) until the bugs
+were fixed; new known-but-unfixed defects should follow the same pattern using
+the ``known_bug`` marker.
 """
 import json
 
@@ -18,9 +17,6 @@ class _FakeCompleted:
 
 
 # ── Bug #1: eka_vector_db.stats() divides by zero on an empty training file ──
-@pytest.mark.known_bug
-@pytest.mark.xfail(raises=ZeroDivisionError, strict=True,
-                   reason="stats() computes count/total_lines with no guard for total_lines==0")
 def test_stats_handles_empty_training_file(tmp_path, monkeypatch):
     import eka_vector_db as vdb
 
@@ -37,9 +33,6 @@ def test_stats_handles_empty_training_file(tmp_path, monkeypatch):
 
 
 # ── Bug #3: eka_agent_push.push_items never removes its temp payload file ──
-@pytest.mark.known_bug
-@pytest.mark.xfail(strict=True,
-                   reason="os.remove(payload_file) is unreachable (placed after return)")
 def test_push_items_cleans_up_payload_file(tmp_path, monkeypatch):
     import eka_agent_push as push
 
@@ -54,9 +47,6 @@ def test_push_items_cleans_up_payload_file(tmp_path, monkeypatch):
 
 
 # ── Bug #5: eka_agent_pull.vps_get crashes on empty curl output ──
-@pytest.mark.known_bug
-@pytest.mark.xfail(raises=json.JSONDecodeError, strict=True,
-                   reason="vps_get/vps_post call json.loads on unchecked curl stdout")
 def test_vps_get_handles_empty_response(monkeypatch):
     import eka_agent_pull as pull
 

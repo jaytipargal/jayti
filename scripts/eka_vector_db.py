@@ -240,7 +240,7 @@ def stats(json_mode=False):
         print(f"  Last indexed line: {state.get('last_indexed_line', 0):,}")
         print(f"  Total indexed (all time): {state.get('total_indexed', 0):,}")
         print(f"  Training file lines: {total_lines:,}")
-        print(f"  Coverage: {(count / total_lines * 100):.1f}%")
+        print(f"  Coverage: {data['coverage_percent']:.1f}%")
     return data
 
 # ─── MAIN ───
