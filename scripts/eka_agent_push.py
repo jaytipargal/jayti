@@ -25,10 +25,46 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 # ─── Config ───
-VPS_URL = "https://agent.jaytipargal.tech"
-API_KEY = "YOUR_API_KEY_HERE"
-LAST_SYNC_FILE = "/etc/eka_agent/last_sync"  # or ~/.eka_agent/last_sync on Windows
+# Credentials are per device and are issued by the hub (POST /register_device with
+# the bootstrap key), so they are never hardcoded here. They are read from the
+# environment, or from a device.env file of KEY=value lines:
+#   EKA_DEVICE_ID=windows_pc_abcom
+#   EKA_DEVICE_KEY=jt_...
+# Looked for at $EKA_DEVICE_ENV, /etc/eka-agent/device.env, then ~/.eka_agent/device.env.
 STATE_DIR = os.path.expanduser("~/.eka_agent")
+DEVICE_ENV_CANDIDATES = [
+    os.environ.get("EKA_DEVICE_ENV"),
+    "/etc/eka-agent/device.env",
+    os.path.join(STATE_DIR, "device.env"),
+]
+
+
+def _load_device_env():
+    """Merge the first readable device.env into a dict; the environment wins."""
+    values = {}
+    for path in DEVICE_ENV_CANDIDATES:
+        if not path or not os.path.exists(path):
+            continue
+        with open(path, "r", encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if not line or line.startswith("#") or "=" not in line:
+                    continue
+                k, v = line.split("=", 1)
+                values.setdefault(k.strip(), v.strip())
+        break
+    return values
+
+
+_DEVICE_ENV = _load_device_env()
+
+
+def _cfg(name, default=None):
+    return os.environ.get(name) or _DEVICE_ENV.get(name) or default
+
+
+VPS_URL = _cfg("EKA_VPS_URL", "https://agent.jaytipargal.tech").rstrip("/")
+DEVICE_KEY = _cfg("EKA_DEVICE_KEY", "")
 
 def get_last_sync(device):
     """Read last sync timestamp for this device."""
@@ -56,18 +92,26 @@ def push_items(items, device):
         print(f"  [{device}] No new data to push.")
         return {"inserted": 0, "duplicates": 0, "errors": 0}
 
-    payload = {"items": items}
+    if not DEVICE_KEY:
+        print(f"  [{device}] No EKA_DEVICE_KEY configured — register the device first "
+              f"(POST {VPS_URL}/register_device with the hub bootstrap key).")
+        return {"inserted": 0, "duplicates": 0, "errors": 1}
+
+    payload = {"device": device, "items": items}
     payload_file = os.path.join(STATE_DIR, f"push_payload_{device}.json")
     os.makedirs(STATE_DIR, exist_ok=True)
 
     with open(payload_file, "w") as f:
         json.dump(payload, f, default=str)
 
+    # The hub authenticates the pair: X-Device-Id selects the row in api_keys and
+    # X-Api-Key is verified against its argon2 hash.
     cmd = [
         "curl", "-s", "-X", "POST",
         f"{VPS_URL}/ingest",
         "-H", "Content-Type: application/json",
-        "-H", f"X-API-Key: {API_KEY}",
+        "-H", f"X-Device-Id: {device}",
+        "-H", f"X-Api-Key: {DEVICE_KEY}",
         "-d", f"@{payload_file}"
     ]
     try:
