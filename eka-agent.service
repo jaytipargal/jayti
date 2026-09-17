@@ -7,7 +7,9 @@ Wants=eka-retrieval.service
 Type=simple
 User=root
 WorkingDirectory=/opt/eka-agent
-Environment=ANTHROPIC_API_KEY=%ANTHROPIC_KEY%
+# ANTHROPIC_API_KEY lives in /etc/eka-agent/agent.env (mode 600), not in this unit:
+#   install -d -m 700 /etc/eka-agent && echo 'ANTHROPIC_API_KEY=sk-ant-...' > /etc/eka-agent/agent.env && chmod 600 /etc/eka-agent/agent.env
+EnvironmentFile=/etc/eka-agent/agent.env
 Environment=RETRIEVAL_URL=http://localhost:8100
 Environment=ANTHROPIC_MODEL=claude-sonnet-4-6
 ExecStart=/opt/eka-agent/venv/bin/python /opt/eka-agent/eka_agent_cloud.py
