@@ -1,0 +1,16 @@
+[Unit]
+Description=Jayti Hub (FastAPI, nginx-terminated TLS)
+After=network.target postgresql.service
+
+[Service]
+Type=simple
+EnvironmentFile=/etc/jayti/hub.env
+ExecStart=/opt/jayti/hub/venv/bin/python -m uvicorn jayti_hub_server:app \
+    --host 127.0.0.1 --port 8443 --workers 2
+WorkingDirectory=/opt/jayti/hub
+Restart=on-failure
+RestartSec=5
+User=root
+
+[Install]
+WantedBy=multi-user.target

@@ -4,13 +4,13 @@
 # Works on: Termux (Android), Linux, macOS, WSL, any Unix
 # ============================================================
 # Usage:
-#   curl -sL https://agent.urgaa.in/install.sh | bash
+#   curl -sL https://agent.jaytipargal.tech/install.sh | bash
 # ============================================================
 
 set -e
 
 INSTALL_DIR="${HOME}"
-URL="https://agent.urgaa.in"
+URL="https://agent.jaytipargal.tech"
 
 echo "=== EKA Agent Installer ==="
 echo ""
@@ -41,6 +41,12 @@ fi
 
 # Set default URL
 echo "export EKA_AGENT_URL=\"${URL}\"" >> "${HOME}/.bashrc" 2>/dev/null || true
+
+if [ -z "${EKA_API_KEY:-}" ]; then
+    echo ""
+    echo "NOTE: queries need an API key. Add it to your shell profile:"
+    echo "  echo 'export EKA_API_KEY=\"<key>\"' >> ~/.bashrc"
+fi
 
 echo ""
 echo "✅ Installed! Test with:"

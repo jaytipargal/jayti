@@ -37,8 +37,11 @@ eka-agent-deploy/
 │   ├── deploy_push_agent.sh       # Device deployment script
 │   └── setup_windows_tasks.bat    # Windows scheduled tasks setup
 ├── config/
-│   ├── eka-agent-nginx-ssl.conf   # Nginx reverse proxy config (HTTPS)
-│   └── eka-agent-api.service      # systemd service file for API
+│   └── eka-agent-api.service      # legacy API unit (superseded by server/jayti-hub; keep disabled)
+├── nginx/                         # live nginx config for agent.jaytipargal.tech / agent.urgaa.in
+├── server/
+│   ├── jayti-hub/                 # ingestion API actually running on the VPS (:8443)
+│   └── jayti-retrieval/           # per-device-auth FAISS retrieval (:8444, /retrieve/)
 ├── docs/
 │   └── AGENT_DATABASE_ARCHITECTURE.md  # Full architecture documentation
 ├── .gitignore
@@ -64,19 +67,26 @@ python3 -m venv /root/eka_venv
 source /root/eka_venv/bin/activate
 pip install fastapi uvicorn psycopg2-binary pydantic
 
-# 4. Copy eka_agent_server.py to VPS and set up systemd service
-sudo cp config/eka-agent-api.service /etc/systemd/system/
-sudo systemctl daemon-reload
-sudo systemctl enable eka-agent-api
-sudo systemctl start eka-agent-api
+# 4. Ingestion API: Jayti Hub (server/jayti-hub) on 127.0.0.1:8443
+#    It replaced scripts/eka_agent_server.py + config/eka-agent-api.service,
+#    which must NOT be enabled alongside it (both bind 8443).
+sudo mkdir -p /opt/jayti/hub /etc/jayti
+sudo cp server/jayti-hub/jayti_hub_server.py /opt/jayti/hub/
+sudo cp server/jayti-hub/hub.env.example /etc/jayti/hub.env && sudo chmod 600 /etc/jayti/hub.env   # fill in
+sudo cp server/jayti-hub/jayti-hub.service /etc/systemd/system/
+sudo systemctl daemon-reload && sudo systemctl enable --now jayti-hub
 
-# 5. Set up Nginx reverse proxy with SSL
+# 5. Nginx + TLS for agent.jaytipargal.tech (agent.urgaa.in is a legacy alias)
 sudo apt install -y nginx certbot python3-certbot-nginx
-sudo cp config/eka-agent-nginx-ssl.conf /etc/nginx/sites-available/eka-agent
-sudo ln -s /etc/nginx/sites-available/eka-agent /etc/nginx/sites-enabled/
-sudo certbot --nginx -d agent.urgaa.in
-sudo systemctl reload nginx
+sudo cp nginx/snippets/eka-agent-locations.conf /etc/nginx/snippets/
+sudo install -m 600 nginx/conf.d/eka-agent-api-key.conf.example /etc/nginx/conf.d/eka-agent-api-key.conf  # set key
+sudo cp nginx/sites/agent.jaytipargal.tech.conf /etc/nginx/sites-available/jaytipargal-agent
+sudo ln -s /etc/nginx/sites-available/jaytipargal-agent /etc/nginx/sites-enabled/
+sudo certbot certonly --nginx -d agent.jaytipargal.tech
+sudo nginx -t && sudo systemctl reload nginx
 ```
+
+`/agent/*` and `/retrieval/*` require the `X-API-Key` from `eka-agent-api-key.conf`; the same key is `AGENT_API_KEY` in the jayti-dashboard Vercel project and `EKA_API_KEY` for `eka_client.sh`. DNS for `agent.jaytipargal.tech` (A/AAAA → the VPS) lives in Vercel DNS.
 
 ### 2. Device Setup
 

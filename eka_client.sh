@@ -11,17 +11,24 @@
 #   ./eka_client.sh "your query" --search      # search only, no LLM
 #
 # Setup:
-#   export EKA_AGENT_URL="https://api.eka-ai.in"
-#   # or default: http://139.84.165.81
+#   export EKA_AGENT_URL="https://agent.jaytipargal.tech"
+#   export EKA_API_KEY="<key>"   # required for /agent and /retrieval
 #
 # Install on Termux:
 #   pkg install curl
-#   curl -o ~/eka_client.sh https://api.eka-ai.in/eka_client.sh
+#   curl -o ~/eka_client.sh https://agent.jaytipargal.tech/eka_client.sh
 #   chmod +x ~/eka_client.sh
-#   echo 'export EKA_AGENT_URL="https://api.eka-ai.in"' >> ~/.bashrc
+#   echo 'export EKA_AGENT_URL="https://agent.jaytipargal.tech"' >> ~/.bashrc
+#   echo 'export EKA_API_KEY="<key>"' >> ~/.bashrc
 # ============================================================
 
-EKA_AGENT_URL="${EKA_AGENT_URL:-https://agent.urgaa.in}"
+EKA_AGENT_URL="${EKA_AGENT_URL:-https://agent.jaytipargal.tech}"
+
+# nginx rejects /agent/* and /retrieval/* (except /health) without this key.
+AUTH_HEADER=()
+if [ -n "${EKA_API_KEY:-}" ]; then
+    AUTH_HEADER=(-H "X-API-Key: ${EKA_API_KEY}")
+fi
 
 if [ $# -lt 1 ]; then
     echo "EKA Agent Client"
@@ -81,11 +88,11 @@ fi
 if [ "$SEARCH_ONLY" = true ]; then
     if [ "$JSON_OUTPUT" = true ]; then
         curl -s -X POST "${EKA_AGENT_URL}/retrieval/search" \
-            -H "Content-Type: application/json" \
+            -H "Content-Type: application/json" "${AUTH_HEADER[@]}" \
             -d "{\"query\": \"${QUERY}\", \"top_k\": ${TOP_K}}"
     else
         curl -s -X POST "${EKA_AGENT_URL}/retrieval/search" \
-            -H "Content-Type: application/json" \
+            -H "Content-Type: application/json" "${AUTH_HEADER[@]}" \
             -d "{\"query\": \"${QUERY}\", \"top_k\": ${TOP_K}}" | \
             python3 -c "
 import sys, json
@@ -103,7 +110,7 @@ for i, hit in enumerate(data['hits'], 1):
     print(f'    Text: {doc}...' if len(hit['document']) > 500 else f'    Text: {doc}')
     print()
 " 2>/dev/null || curl -s -X POST "${EKA_AGENT_URL}/retrieval/search" \
-            -H "Content-Type: application/json" \
+            -H "Content-Type: application/json" "${AUTH_HEADER[@]}" \
             -d "{\"query\": \"${QUERY}\", \"top_k\": ${TOP_K}}"
     fi
     exit 0
@@ -115,7 +122,7 @@ PAYLOAD="{\"query\": \"${QUERY}\", \"top_k\": ${TOP_K}, \"use_rag\": ${USE_RAG}}
 # ── Stream mode ──
 if [ "$STREAM_MODE" = true ]; then
     curl -N -X POST "${EKA_AGENT_URL}/agent/query/stream" \
-        -H "Content-Type: application/json" \
+        -H "Content-Type: application/json" "${AUTH_HEADER[@]}" \
         -d "${PAYLOAD}" 2>/dev/null | while IFS= read -r line; do
         if echo "$line" | grep -q '^data: '; then
             echo "$line" | sed 's/^data: //' | python3 -c "
@@ -143,11 +150,11 @@ fi
 # ── Normal query ──
 if [ "$JSON_OUTPUT" = true ]; then
     curl -s -X POST "$ENDPOINT" \
-        -H "Content-Type: application/json" \
+        -H "Content-Type: application/json" "${AUTH_HEADER[@]}" \
         -d "${PAYLOAD}"
 else
     RESPONSE=$(curl -s -X POST "$ENDPOINT" \
-        -H "Content-Type: application/json" \
+        -H "Content-Type: application/json" "${AUTH_HEADER[@]}" \
         -d "${PAYLOAD}")
 
     echo "$RESPONSE" | python3 -c "
