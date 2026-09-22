@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
-"""Colab entry: HF metadata → TAN/jtagent → GPT-2 LoRA → per-device packs."""
+"""Colab entry: Drive sync → segment JSONL → GPT-2 LoRA per category → packs → push.
+
+Paths stay under /content/TAN/jtagent (folder id only). Does not full-SFT the
+~29.5GB Hub model shards. Falls back to seed_chunks only when ingestion is empty.
+"""
 
 from __future__ import annotations
 
@@ -7,10 +11,11 @@ import json
 import os
 import subprocess
 import sys
-from datetime import date
 from pathlib import Path
 
 ROOT = Path("/content/TAN/jtagent")
+TAN = Path("/content/TAN")
+FOLDER_ID = "1ondyw5YrwXpE6jV48nYpRlg4Z1QkZWUB"
 HF_MODEL = "go4garage01/jt-agent-model"
 HF_DATA = "go4garage01/jt-agent-data"
 
@@ -19,17 +24,27 @@ def _pip(pkgs: list[str]) -> None:
     subprocess.check_call([sys.executable, "-m", "pip", "install", "-q", *pkgs])
 
 
+def _sandbox_dir() -> Path:
+    for p in (
+        Path("/content/jayti/sandbox/jtagent"),
+        Path("/content/sandbox/jtagent"),
+        Path(__file__).resolve().parent,
+    ):
+        if (p / "pack_devices.py").exists():
+            return p
+    return Path("/content/jayti/sandbox/jtagent")
+
+
 def sync_hf(dest: Path) -> None:
     dest.mkdir(parents=True, exist_ok=True)
     seed = Path("/content/jtagent-hf-seed")
     if (seed / "model").exists():
         import shutil
 
-        if (seed / "model").exists():
-            (dest / "model-meta").mkdir(parents=True, exist_ok=True)
-            for p in (seed / "model").iterdir():
-                if p.is_file() and p.suffix in {".md", ".txt", ".json"}:
-                    shutil.copy2(p, dest / "model-meta" / p.name)
+        (dest / "model-meta").mkdir(parents=True, exist_ok=True)
+        for p in (seed / "model").iterdir():
+            if p.is_file() and p.suffix in {".md", ".txt", ".json"}:
+                shutil.copy2(p, dest / "model-meta" / p.name)
         if (seed / "data").exists():
             (dest / "dataset-card").mkdir(parents=True, exist_ok=True)
             for p in (seed / "data").iterdir():
@@ -42,6 +57,7 @@ def sync_hf(dest: Path) -> None:
         except ImportError:
             _pip(["huggingface_hub"])
             from huggingface_hub import snapshot_download
+
         snapshot_download(
             HF_MODEL,
             local_dir=str(dest / "model-meta"),
@@ -76,62 +92,40 @@ def sync_hf(dest: Path) -> None:
     )
 
 
-def train_gpt2_lora(chunks_path: Path, adapter_dir: Path) -> str | None:
-    # Colab GPU images already ship CUDA torch; pip installing torch can replace it with CPU.
-    pkgs = ["transformers", "peft", "datasets", "accelerate", "torchao>=0.16"]
-    try:
-        import torch  # noqa: F401
-    except ImportError:
-        pkgs.insert(0, "torch")
-    _pip(pkgs)
-    sys.path.insert(0, "/content/google-colab-cli")  # unused; jayti scripts next
-    jayti_scripts = Path("/content/jayti/scripts")
-    if jayti_scripts.exists():
-        sys.path.insert(0, str(jayti_scripts))
-    try:
-        import eka_train
-    except ImportError:
-        print("eka_train not on VM; skip LoRA (pack still written)")
-        return None
-
-    eka_train.TRAINING_FILE = str(chunks_path)
-    eka_train.ADAPTER_DIR = str(adapter_dir)
-    eka_train.NUM_EPOCHS = 1
-    eka_train.BATCH_SIZE = 1
-    eka_train.MAX_SEQ_LEN = 128
-    chunks = eka_train.load_training_data(date_str=None, batch_size=20)
-    return eka_train.train_lora(chunks, date.today().isoformat())
-
-
 def main() -> None:
     print("jtagent sandbox colab_run")
     print("NO_FULL_DRIVE_MOUNT")
     ROOT.mkdir(parents=True, exist_ok=True)
-    sandbox_src = Path("/content/jayti/sandbox/jtagent")
-    if not sandbox_src.exists():
-        sandbox_src = Path("/content/sandbox/jtagent")
-    sys.path.insert(0, str(sandbox_src if sandbox_src.exists() else "/content"))
-    from pack_devices import pack_devices, seed_chunks, write_jsonl  # type: ignore
+    sandbox = _sandbox_dir()
+    sys.path.insert(0, str(sandbox))
+    sys.path.insert(0, str(sandbox.parent.parent / "scripts"))
+
+    import drive_sync  # type: ignore
+    import segment_jsonl  # type: ignore
+    import segment_train  # type: ignore
+
+    drive_sync.cmd_mount(FOLDER_ID, TAN)
+    pull_rc = drive_sync.cmd_pull(FOLDER_ID, TAN)
+    print("drive_pull_rc", pull_rc)
 
     sync_hf(ROOT / "hf")
-    chunks_path = ROOT / "training" / "sandbox_chunks.jsonl"
-    # First 10 lines skipped by eka_train.load_training_data
-    pad = [{"input": f"pad-{i}", "output": "ok"} for i in range(10)]
-    write_jsonl(chunks_path, pad + seed_chunks())
-    adapter = None
-    try:
-        adapter = train_gpt2_lora(chunks_path, ROOT / "adapters")
-    except Exception as exc:
-        print("train_error", type(exc).__name__, exc)
-    layout = pack_devices(ROOT, extra={"adapter": adapter})
-    report = {
+    manifest = segment_jsonl.run(ROOT)
+    print("segment_manifest", json.dumps(manifest))
+
+    report = segment_train.train_categories(ROOT)
+    push_rc = drive_sync.cmd_push(FOLDER_ID, TAN)
+    print("drive_push_rc", push_rc)
+
+    final = {
         "root": str(ROOT),
-        "adapter": adapter,
-        "devices": layout,
-        "files": sorted(str(p.relative_to(ROOT)) for p in ROOT.rglob("*") if p.is_file())[:80],
+        "folder_id": FOLDER_ID,
+        "segment": manifest,
+        "train": report,
+        "drive_pull_rc": pull_rc,
+        "drive_push_rc": push_rc,
     }
-    (ROOT / "RUN_REPORT.md").write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
-    print(json.dumps(report, indent=2))
+    (ROOT / "RUN_REPORT.md").write_text(json.dumps(final, indent=2) + "\n", encoding="utf-8")
+    print(json.dumps(final, indent=2))
     print("JTAGENT_COLAB_DONE")
 
 

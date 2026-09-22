@@ -101,6 +101,8 @@ def pack_devices(root: Path, extra: dict | None = None) -> dict:
     facts = dict(SANDBOX_FACTS)
     if extra:
         facts.update(extra)
+    adapter = facts.get("adapter")
+    adapters_by_category = facts.get("adapters_by_category") or {}
     layout = {}
     for name in DEVICES:
         dest = root / "devices" / name
@@ -110,18 +112,35 @@ def pack_devices(root: Path, extra: dict | None = None) -> dict:
             "agent": facts["agent"],
             "email": facts["email"],
             "drive_folder_id": facts["drive_folder_id"],
+            "drive_folder_url": facts["drive_folder_url"],
             "hf_model": facts["hf_model"],
             "hf_dataset": facts["hf_dataset"],
-            "colab_session": facts["colab_session"],
+            "colab_session": facts.get("colab_session", SANDBOX_FACTS["colab_session"]),
+            "gpu": facts.get("gpu"),
+            "adapter": adapter,
+            "adapters_by_category": adapters_by_category,
+            "adapter_drive_path": (
+                f"jtagent/adapters/{Path(adapter).name}"
+                if adapter
+                else "jtagent/adapters/"
+            ),
             "push_command": f"python scripts/eka_agent_push.py --device {name}",
+            "physical_online": False,
+            "liveness_note": "Do not claim physical hardware online without evidence from that device.",
             "integrity": {
                 "asus_vivobook": "physical ASUS; liveness only from that hardware",
-                "windows_pc_abcom": "Lenovo G4G-LAPTOP; NOT_ASUS",
+                "windows_pc_abcom": "Lenovo G4G-LAPTOP; NOT_ASUS; never write ASUS liveness from G4G",
                 "samsung_s24_ultra": "ADB empty unless the phone is attached",
             }[name],
         }
         (dest / "README.md").write_text(
-            f"# {name}\n\nSandbox pack for jtagent. Drive folder {facts['drive_folder_id']}.\n",
+            (
+                f"# {name}\n\n"
+                f"Sandbox pack for jtagent. Drive folder `{facts['drive_folder_id']}`.\n\n"
+                f"- Adapter: `{adapter or 'pending'}`\n"
+                f"- Push: `{pack['push_command']}`\n"
+                f"- Integrity: {pack['integrity']}\n"
+            ),
             encoding="utf-8",
         )
         (dest / "pack.jsonl").write_text(

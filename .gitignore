@@ -3,6 +3,10 @@
 .env.*
 *.env
 
+# Local sandbox secrets (DSN, rclone tokens) — never commit
+sandbox/jtagent/.local/
+*.dsn
+
 # Credential files
 *.json
 serviceAccountKey.json
