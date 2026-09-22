@@ -77,7 +77,14 @@ def sync_hf(dest: Path) -> None:
 
 
 def train_gpt2_lora(chunks_path: Path, adapter_dir: Path) -> str | None:
-    _pip(["torch", "transformers", "peft", "datasets", "accelerate", "torchao>=0.16"])
+    # Colab GPU images already ship CUDA torch; pip installing torch can replace it with CPU.
+    pkgs = ["transformers", "peft", "datasets", "accelerate"]
+    try:
+        import torch  # noqa: F401
+    except ImportError:
+        pkgs.insert(0, "torch")
+        pkgs.append("torchao>=0.16")
+    _pip(pkgs)
     sys.path.insert(0, "/content/google-colab-cli")  # unused; jayti scripts next
     jayti_scripts = Path("/content/jayti/scripts")
     if jayti_scripts.exists():

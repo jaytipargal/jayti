@@ -19,7 +19,7 @@ SANDBOX_FACTS = {
     "hf_dataset": "go4garage01/jt-agent-data",
     "drive_folder_id": "1ondyw5YrwXpE6jV48nYpRlg4Z1QkZWUB",
     "drive_folder_url": "https://drive.google.com/drive/folders/1ondyw5YrwXpE6jV48nYpRlg4Z1QkZWUB",
-    "colab_session": "jt-agent",
+    "colab_session": "jt-agent-gpu",
     "email": "jaytipargal.jp@gmail.com",
 }
 
