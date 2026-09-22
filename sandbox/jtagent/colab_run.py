@@ -77,7 +77,7 @@ def sync_hf(dest: Path) -> None:
 
 
 def train_gpt2_lora(chunks_path: Path, adapter_dir: Path) -> str | None:
-    _pip(["torch", "transformers", "peft", "datasets", "accelerate"])
+    _pip(["torch", "transformers", "peft", "datasets", "accelerate", "torchao>=0.16"])
     sys.path.insert(0, "/content/google-colab-cli")  # unused; jayti scripts next
     jayti_scripts = Path("/content/jayti/scripts")
     if jayti_scripts.exists():
