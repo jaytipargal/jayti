@@ -200,6 +200,120 @@ def cmd_pull(folder_id: str, local_root: Path) -> int:
     return 0
 
 
+def _drive_api_creds():
+    """Best-effort Google credentials with Drive access (Colab or ADC)."""
+    try:
+        from google.colab import auth as colab_auth  # type: ignore
+
+        colab_auth.authenticate_user()
+        import google.auth
+
+        creds, _ = google.auth.default(
+            scopes=["https://www.googleapis.com/auth/drive"]
+        )
+        return creds
+    except Exception:
+        pass
+    try:
+        import google.auth
+
+        creds, _ = google.auth.default(
+            scopes=["https://www.googleapis.com/auth/drive"]
+        )
+        return creds
+    except Exception:
+        return None
+
+
+def _ensure_drive_child(service, parent_id: str, name: str, mime_folder: bool) -> str:
+    q = (
+        f"'{parent_id}' in parents and name = '{name}' and trashed = false"
+        + (" and mimeType = 'application/vnd.google-apps.folder'" if mime_folder else "")
+    )
+    resp = (
+        service.files()
+        .list(q=q, spaces="drive", fields="files(id,name)", pageSize=5)
+        .execute()
+    )
+    files = resp.get("files") or []
+    if files:
+        return files[0]["id"]
+    body = {"name": name, "parents": [parent_id]}
+    if mime_folder:
+        body["mimeType"] = "application/vnd.google-apps.folder"
+    created = service.files().create(body=body, fields="id").execute()
+    return created["id"]
+
+
+def _drive_api_upload_tree(folder_id: str, local_root: Path, rel: str) -> None:
+    from googleapiclient.discovery import build  # type: ignore
+    from googleapiclient.http import MediaFileUpload  # type: ignore
+
+    creds = _drive_api_creds()
+    if creds is None:
+        raise RuntimeError("no Google credentials for Drive API")
+    service = build("drive", "v3", credentials=creds, cache_discovery=False)
+    src = local_root / rel
+    # Walk path components under folder_id
+    parts = Path(rel).parts
+    parent = folder_id
+    for i, part in enumerate(parts):
+        is_last = i == len(parts) - 1
+        if is_last and src.is_file():
+            media = MediaFileUpload(str(src), resumable=True)
+            # replace existing same-name file if any
+            q = f"'{parent}' in parents and name = '{part}' and trashed = false"
+            existing = (
+                service.files()
+                .list(q=q, spaces="drive", fields="files(id)", pageSize=1)
+                .execute()
+                .get("files")
+                or []
+            )
+            if existing:
+                service.files().update(
+                    fileId=existing[0]["id"], media_body=media
+                ).execute()
+            else:
+                service.files().create(
+                    body={"name": part, "parents": [parent]},
+                    media_body=media,
+                    fields="id",
+                ).execute()
+            return
+        parent = _ensure_drive_child(service, parent, part, mime_folder=True)
+    # Directory upload
+    if src.is_dir():
+        for path in src.rglob("*"):
+            if not path.is_file() or _should_skip(path):
+                continue
+            rel_parts = path.relative_to(src).parts
+            cur = parent
+            for j, part in enumerate(rel_parts):
+                if j == len(rel_parts) - 1:
+                    media = MediaFileUpload(str(path), resumable=True)
+                    q = f"'{cur}' in parents and name = '{part}' and trashed = false"
+                    existing = (
+                        service.files()
+                        .list(q=q, spaces="drive", fields="files(id)", pageSize=1)
+                        .execute()
+                        .get("files")
+                        or []
+                    )
+                    if existing:
+                        service.files().update(
+                            fileId=existing[0]["id"], media_body=media
+                        ).execute()
+                    else:
+                        service.files().create(
+                            body={"name": part, "parents": [cur]},
+                            media_body=media,
+                            fields="id",
+                        ).execute()
+                else:
+                    cur = _ensure_drive_child(service, cur, part, mime_folder=True)
+
+
 def cmd_push(folder_id: str, local_root: Path) -> int:
     write_rclone_config(folder_id)
     conf = _conf_path()
@@ -210,7 +324,6 @@ def cmd_push(folder_id: str, local_root: Path) -> int:
         if not src.exists():
             print(f"skip missing {src}")
             continue
-        # Destination path under the folder root mirrors local relative path
         dest = f"{REMOTE_NAME}:{rel}"
         try:
             if src.is_dir():
@@ -246,7 +359,20 @@ def cmd_push(folder_id: str, local_root: Path) -> int:
                 )
             pushed.append(rel)
         except (subprocess.CalledProcessError, FileNotFoundError) as exc:
-            errors.append({"path": rel, "error": str(exc)})
+            # Fallback: Drive API (Colab user auth / ADC)
+            try:
+                print(f"rclone push failed for {rel}; trying Drive API fallback")
+                _drive_api_upload_tree(folder_id, local_root, rel)
+                pushed.append(rel)
+                print(f"drive_api_push_ok {rel}")
+            except Exception as api_exc:  # noqa: BLE001
+                errors.append(
+                    {
+                        "path": rel,
+                        "error": str(exc),
+                        "drive_api_error": f"{type(api_exc).__name__}: {api_exc}",
+                    }
+                )
     # Flush: about + lsd forces rclone to talk to Drive (not VM-cache-only).
     try:
         _run(

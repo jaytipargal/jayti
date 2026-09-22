@@ -103,6 +103,17 @@ def pack_devices(root: Path, extra: dict | None = None) -> dict:
         facts.update(extra)
     adapter = facts.get("adapter")
     adapters_by_category = facts.get("adapters_by_category") or {}
+    if adapter:
+        ap = Path(str(adapter))
+        # Prefer .../adapters/adapter_<label>/final → jtagent/adapters/adapter_<label>/final
+        parts = ap.parts
+        if "adapters" in parts:
+            idx = parts.index("adapters")
+            adapter_drive_path = "jtagent/" + "/".join(parts[idx:])
+        else:
+            adapter_drive_path = f"jtagent/adapters/{ap.parent.name}/{ap.name}"
+    else:
+        adapter_drive_path = "jtagent/adapters/"
     layout = {}
     for name in DEVICES:
         dest = root / "devices" / name
@@ -119,11 +130,7 @@ def pack_devices(root: Path, extra: dict | None = None) -> dict:
             "gpu": facts.get("gpu"),
             "adapter": adapter,
             "adapters_by_category": adapters_by_category,
-            "adapter_drive_path": (
-                f"jtagent/adapters/{Path(adapter).name}"
-                if adapter
-                else "jtagent/adapters/"
-            ),
+            "adapter_drive_path": adapter_drive_path,
             "push_command": f"python scripts/eka_agent_push.py --device {name}",
             "physical_online": False,
             "liveness_note": "Do not claim physical hardware online without evidence from that device.",
