@@ -306,7 +306,14 @@ def seed_fallback(root: Path) -> dict:
     from pack_devices import seed_chunks  # type: ignore
 
     chunks = redact_chunks(seed_chunks())
-    manifest = write_category_jsonl(root, chunks)
+    # Also emit a combined sandbox_ops file so LoRA has N≥min_chunks when
+    # per-category seed rows are tiny (queue empty).
+    combined = []
+    for c in chunks:
+        row = dict(c)
+        row["category"] = "sandbox_ops"
+        combined.append(row)
+    manifest = write_category_jsonl(root, chunks + combined)
     manifest["fallback_seed"] = True
     (root / "training" / "SEGMENT_MANIFEST.json").write_text(
         json.dumps(manifest, indent=2) + "\n", encoding="utf-8"
