@@ -38,6 +38,17 @@ def _sandbox_dir() -> Path:
 def sync_hf(dest: Path) -> None:
     dest.mkdir(parents=True, exist_ok=True)
     seed = Path("/content/jtagent-hf-seed")
+    pointer = {
+        "model": HF_MODEL,
+        "dataset": HF_DATA,
+        "weights": "not copied (six safetensor shards, ~29.5GB); train GPT-2 LoRA here",
+        "skipped": [
+            "config/encryption/key-derivation.json",
+            "config/sources/chrome.json",
+            "config/sources/whatsapp.json",
+            "jtagent/chrome-browser-data sqlite",
+        ],
+    }
     if (seed / "model").exists():
         import shutil
 
@@ -58,35 +69,33 @@ def sync_hf(dest: Path) -> None:
             _pip(["huggingface_hub"])
             from huggingface_hub import snapshot_download
 
-        snapshot_download(
-            HF_MODEL,
-            local_dir=str(dest / "model-meta"),
-            allow_patterns=[
-                "README.md",
-                "config.json",
-                "generation_config.json",
-                "knowledge_base.txt",
-                "hf_filter.txt",
-                "requirements.txt",
-            ],
-        )
-        snapshot_download(
-            HF_DATA,
-            repo_type="dataset",
-            local_dir=str(dest / "dataset-card"),
-            allow_patterns=["README.md", ".gitattributes"],
-        )
-    pointer = {
-        "model": HF_MODEL,
-        "dataset": HF_DATA,
-        "weights": "not copied (six safetensor shards, ~29.5GB); train GPT-2 LoRA here",
-        "skipped": [
-            "config/encryption/key-derivation.json",
-            "config/sources/chrome.json",
-            "config/sources/whatsapp.json",
-            "jtagent/chrome-browser-data sqlite",
-        ],
-    }
+        try:
+            snapshot_download(
+                HF_MODEL,
+                local_dir=str(dest / "model-meta"),
+                allow_patterns=[
+                    "README.md",
+                    "config.json",
+                    "generation_config.json",
+                    "knowledge_base.txt",
+                    "hf_filter.txt",
+                    "requirements.txt",
+                ],
+            )
+            snapshot_download(
+                HF_DATA,
+                repo_type="dataset",
+                local_dir=str(dest / "dataset-card"),
+                allow_patterns=["README.md", ".gitattributes"],
+            )
+        except Exception as exc:  # noqa: BLE001 — metadata is optional for GPT-2 LoRA
+            pointer["hf_meta_error"] = f"{type(exc).__name__}: {exc}"
+            print("hf_meta_skip", type(exc).__name__)
+            (dest / "model-meta").mkdir(parents=True, exist_ok=True)
+            (dest / "model-meta" / "README.md").write_text(
+                f"# {HF_MODEL}\n\nMetadata download skipped: {type(exc).__name__}\n",
+                encoding="utf-8",
+            )
     (dest / "HUB_POINTER.md").write_text(
         json.dumps(pointer, indent=2) + "\n", encoding="utf-8"
     )
