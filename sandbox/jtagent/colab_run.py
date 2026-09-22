@@ -104,7 +104,7 @@ def main() -> None:
     sandbox_src = Path("/content/jayti/sandbox/jtagent")
     if not sandbox_src.exists():
         sandbox_src = Path("/content/sandbox/jtagent")
-    sys.path.insert(0, str(sandbox_src.parent if sandbox_src.exists() else "/content"))
+    sys.path.insert(0, str(sandbox_src if sandbox_src.exists() else "/content"))
     from pack_devices import pack_devices, seed_chunks, write_jsonl  # type: ignore
 
     sync_hf(ROOT / "hf")
