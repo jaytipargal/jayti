@@ -21,7 +21,8 @@ import pytest
 # ── Make the target modules importable ──────────────────────────────────
 REPO_ROOT = Path(__file__).resolve().parent.parent
 SCRIPTS_DIR = REPO_ROOT / "scripts"
-for p in (REPO_ROOT, SCRIPTS_DIR):
+JTAGENT_DIR = REPO_ROOT / "sandbox" / "jtagent"
+for p in (REPO_ROOT, SCRIPTS_DIR, JTAGENT_DIR):
     if str(p) not in sys.path:
         sys.path.insert(0, str(p))
 
