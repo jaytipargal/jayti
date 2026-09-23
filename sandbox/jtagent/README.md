@@ -36,6 +36,25 @@ colab --auth=oauth2 exec -s jt-agent-gpu -f sandbox/jtagent/colab_run.py --timeo
 colab --auth=oauth2 exec -s jt-agent-gpu -f sandbox/jtagent/gpu_continue_train.py --timeout 2400
 ```
 
+## Queue-aware operator (host side)
+
+```bash
+# Runs queue gate + Colab pull/train + /pull/mark + Drive publish
+python sandbox/jtagent/colab_operator.py
+
+# Optional smoke: first push 9 redacted sandbox rows, then run the same flow
+python sandbox/jtagent/colab_operator.py --simulate-ingest
+```
+
+Operator helpers committed in this repo:
+
+- `colab_segment_e2e.py` (Colab side pull/mark/train)
+- `colab_tar_artifacts.py` (Colab side tarball of adapters/training/devices)
+- `colab_restore_runtime.py` (restore adapters/repo after prune)
+- `PIPELINE_UNBLOCK_RUNBOOK.md` (edge + infra execution plan)
+- `DEVICE_PUSH.md` (physical node push commands)
+- `edge_deploy/` (Vivobook Modelfile + S24 Termux runner templates)
+
 ## Follow-on (not this pass)
 
 Llama 3.2 1B/3B Unsloth QLoRA → GGUF/ExecuTorch → sqlite-vec CRDT → Ollama Modelfile / Termux. Prefer documenting over implementing when T4 memory conflicts with GPT-2 LoRA E2E.

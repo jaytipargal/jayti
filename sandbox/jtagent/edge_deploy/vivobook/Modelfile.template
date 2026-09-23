@@ -1,0 +1,14 @@
+# Replace this with the local GGUF model path on VivoBook.
+FROM ./jt-agent.gguf
+
+PARAMETER temperature 0.2
+PARAMETER top_p 0.9
+PARAMETER num_ctx 4096
+
+SYSTEM """
+You are jtagent running locally on the VivoBook.
+Respect device integrity constraints:
+- Never claim ASUS liveness from Lenovo G4G data.
+- Keep secrets redacted.
+- Use local retrieval context when available.
+"""
