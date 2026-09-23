@@ -1,0 +1,16 @@
+{
+  "name": "jayti-cursor-egress-allowlist",
+  "egressMode": "parent_plus_network_settings",
+  "egressAllowlist": [
+    "api2.cursor.sh",
+    "api3.cursor.sh",
+    "api4.cursor.sh",
+    "*.api5.cursor.sh",
+    "repo42.cursor.sh",
+    "*.authentication.cursor.sh",
+    "authenticator.cursor.sh",
+    "marketplace.cursorapi.com",
+    "cursor-cdn.com",
+    "downloads.cursor.com"
+  ]
+}

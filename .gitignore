@@ -9,6 +9,8 @@ sandbox/jtagent/.local/
 
 # Credential files
 *.json
+!.cursor/
+!.cursor/environment.json
 serviceAccountKey.json
 *_credentials.json
 *_secrets.json
