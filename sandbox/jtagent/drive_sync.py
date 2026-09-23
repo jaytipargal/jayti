@@ -120,7 +120,7 @@ def write_rclone_config(folder_id: str) -> Path:
         lines.append(f"token = {token}")
     conf.write_text("\n".join(lines) + "\n", encoding="utf-8")
     os.chmod(conf, 0o600)
-    print(f"wrote rclone config → {conf} (root_folder_id={folder_id})")
+    print(f"wrote rclone config -> {conf} (root_folder_id={folder_id})")
     return conf
 
 

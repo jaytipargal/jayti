@@ -22,7 +22,8 @@ def load_env() -> None:
     if os.environ.get("EKA_DEVICE_ID") and os.environ.get("EKA_DEVICE_KEY"):
         return
     if not ENV_FILE.is_file():
-        raise FileNotFoundError(f"missing env file: {ENV_FILE}")
+        print(f"env file missing ({ENV_FILE}); continuing in seed/pg fallback mode")
+        return
     for line in ENV_FILE.read_text(encoding="utf-8").splitlines():
         line = line.strip()
         if not line or line.startswith("#") or "=" not in line:
@@ -85,37 +86,48 @@ def main() -> int:
     import segment_train  # type: ignore
 
     items = segment_jsonl.pull_from_hub()
-    if not items:
-        report = {"ok": True, "noop": "no_hub_items", "pulled": 0}
-        print(json.dumps(report, indent=2))
-        print("COLAB_SEGMENT_E2E_DONE")
-        return 0
+    pull_mark = None
+    cursor = None
 
-    cursor = max(int(i.get("id") or 0) for i in items)
-    chunks = []
-    skipped = 0
-    for item in items:
-        chunk = segment_jsonl._item_to_chunk(item)
-        if chunk is None:
-            skipped += 1
-            continue
-        chunks.append(chunk)
+    if items:
+        cursor = max(int(i.get("id") or 0) for i in items)
+        chunks = []
+        skipped = 0
+        for item in items:
+            chunk = segment_jsonl._item_to_chunk(item)
+            if chunk is None:
+                skipped += 1
+                continue
+            chunks.append(chunk)
 
-    chunks = segment_jsonl.redact_chunks(chunks)
-    manifest = segment_jsonl.write_category_jsonl(ROOT, chunks)
-    pull_mark = mark_processed(cursor)
-    train_report = segment_train.train_categories(ROOT)
-
-    report = {
-        "ok": True,
-        "pulled": len(items),
-        "chunks": len(chunks),
-        "skipped": skipped,
-        "cursor": cursor,
-        "manifest": manifest,
-        "pull_mark": pull_mark,
-        "train": train_report,
-    }
+        chunks = segment_jsonl.redact_chunks(chunks)
+        manifest = segment_jsonl.write_category_jsonl(ROOT, chunks)
+        pull_mark = mark_processed(cursor)
+        train_report = segment_train.train_categories(ROOT)
+        report = {
+            "ok": True,
+            "pulled": len(items),
+            "chunks": len(chunks),
+            "skipped": skipped,
+            "cursor": cursor,
+            "manifest": manifest,
+            "pull_mark": pull_mark,
+            "train": train_report,
+        }
+    else:
+        # No live hub rows or credentials; continue via segment_jsonl fallback
+        # so remote-only runs can still complete and produce adapters.
+        manifest = segment_jsonl.run(ROOT)
+        train_report = segment_train.train_categories(ROOT)
+        report = {
+            "ok": True,
+            "pulled": 0,
+            "cursor": None,
+            "manifest": manifest,
+            "pull_mark": None,
+            "train": train_report,
+            "fallback": "seed_or_pg",
+        }
     print(json.dumps(report, indent=2))
     print("COLAB_SEGMENT_E2E_DONE")
     return 0

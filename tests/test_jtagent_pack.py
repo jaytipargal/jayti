@@ -8,6 +8,7 @@ SANDBOX = Path(__file__).resolve().parents[1] / "sandbox" / "jtagent"
 sys.path.insert(0, str(SANDBOX))
 
 from pack_devices import DEVICES, pack_devices, seed_chunks, write_jsonl  # noqa: E402
+from device_bind import DRIVE_OWNER_EMAIL, DetachForbidden, detach_device  # noqa: E402
 import drive_sync  # noqa: E402
 import segment_jsonl  # noqa: E402
 
@@ -114,3 +115,25 @@ def test_segment_skips_chrome_sqlite():
         "content": {"path": "/x/Login Data"},
     }
     assert segment_jsonl._item_to_chunk(item) is None
+
+
+def test_id_owner_cannot_detach_even_if_same_email():
+    with pytest.raises(DetachForbidden):
+        detach_device(
+            "windows_pc_abcom",
+            actor_email=DRIVE_OWNER_EMAIL,
+            owner_explicit=True,
+            as_drive_owner=False,
+        )
+
+
+def test_drive_owner_can_detach_when_explicit():
+    assert (
+        detach_device(
+            "windows_pc_abcom",
+            actor_email=DRIVE_OWNER_EMAIL,
+            owner_explicit=True,
+            as_drive_owner=True,
+        )
+        == "windows_pc_abcom"
+    )

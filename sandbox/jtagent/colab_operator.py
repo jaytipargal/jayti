@@ -30,12 +30,23 @@ REPO_ROOT = HERE.parent.parent
 SEGMENT_SCRIPT = HERE / "colab_segment_e2e.py"
 TAR_SCRIPT = HERE / "colab_tar_artifacts.py"
 RESTORE_SCRIPT = HERE / "colab_restore_runtime.py"
+DRIVE_PUSH_SCRIPT = HERE / "colab_drive_publish.py"
 SIM_INGEST = HERE / "simulate_sandbox_ingest.py"
-ENV_FILE = Path("/workspace/.config/jtagent-devices.env")
+ENV_FILE = Path(
+    os.environ.get(
+        "JTAGENT_DEVICE_ENV",
+        "/workspace/.config/jtagent-devices.env",
+    )
+)
 
 
 def run(cmd: list[str], *, check: bool = True, timeout: int | None = None) -> subprocess.CompletedProcess[str]:
-    proc = subprocess.run(cmd, text=True, capture_output=True, timeout=timeout)
+    env = os.environ.copy()
+    # colab-cli may stream unicode logs from remote cells; force UTF-8 so
+    # Windows cp1252 consoles do not crash on characters like arrows.
+    env.setdefault("PYTHONUTF8", "1")
+    env.setdefault("PYTHONIOENCODING", "utf-8")
+    proc = subprocess.run(cmd, text=True, capture_output=True, timeout=timeout, env=env)
     if check and proc.returncode != 0:
         raise RuntimeError(
             f"command failed ({proc.returncode}): {' '.join(cmd)}\n"
@@ -149,9 +160,10 @@ def restore_runtime(session: str) -> bool:
 
 
 def run_training(session: str) -> str:
-    if not ENV_FILE.is_file():
-        raise FileNotFoundError(f"missing env file: {ENV_FILE}")
-    colab_upload(session, ENV_FILE, "/content/jtagent-dev.env")
+    if ENV_FILE.is_file():
+        colab_upload(session, ENV_FILE, "/content/jtagent-dev.env")
+    else:
+        print(f"train_warn: env file missing ({ENV_FILE}); using fallback mode")
     # Execute checked-in script directly to avoid stale /tmp copies.
     out = colab_exec(session, SEGMENT_SCRIPT, 3600)
     return out
@@ -159,25 +171,56 @@ def run_training(session: str) -> str:
 
 def push_drive_artifacts(session: str) -> dict:
     rclone = shutil.which("rclone")
-    if not rclone:
-        return {"skipped": "rclone missing"}
-    colab_exec(session, TAR_SCRIPT, 300)
-    local_tgz = Path("/tmp/jtagent-push/jtagent-artifacts-operator.tgz")
-    colab_download(session, "/content/jtagent-artifacts.tgz", local_tgz)
-    tree = Path("/tmp/jtagent-push/tree-operator")
-    if tree.exists():
-        shutil.rmtree(tree)
-    tree.mkdir(parents=True, exist_ok=True)
-    with tarfile.open(local_tgz, "r:gz") as tar:
-        tar.extractall(tree)
-    subprocess.run([rclone, "copy", str(tree / "jtagent"), f"{REMOTE}:jtagent"], check=True, text=True)
-    adapters = subprocess.run(
-        [rclone, "lsf", f"{REMOTE}:jtagent/adapters", "--dirs-only"],
-        check=True,
-        text=True,
-        capture_output=True,
-    ).stdout.splitlines()
-    return {"adapters": [a.strip() for a in adapters if a.strip()]}
+    if rclone:
+        try:
+            colab_exec(session, TAR_SCRIPT, 300)
+            local_tgz = Path("/tmp/jtagent-push/jtagent-artifacts-operator.tgz")
+            colab_download(session, "/content/jtagent-artifacts.tgz", local_tgz)
+            tree = Path("/tmp/jtagent-push/tree-operator")
+            if tree.exists():
+                shutil.rmtree(tree)
+            tree.mkdir(parents=True, exist_ok=True)
+            with tarfile.open(local_tgz, "r:gz") as tar:
+                tar.extractall(tree)
+            subprocess.run(
+                [
+                    rclone,
+                    "--auto-confirm",
+                    "copy",
+                    str(tree / "jtagent"),
+                    f"{REMOTE}:jtagent",
+                ],
+                check=True,
+                text=True,
+                timeout=180,
+            )
+            adapters = subprocess.run(
+                [
+                    rclone,
+                    "--auto-confirm",
+                    "lsf",
+                    f"{REMOTE}:jtagent/adapters",
+                    "--dirs-only",
+                ],
+                check=True,
+                text=True,
+                capture_output=True,
+                timeout=120,
+            ).stdout.splitlines()
+            return {
+                "mode": "host_rclone",
+                "adapters": [a.strip() for a in adapters if a.strip()],
+            }
+        except Exception as exc:  # noqa: BLE001
+            print(f"drive_push_warn: host_rclone failed ({type(exc).__name__}: {exc})")
+
+    # Fallback: publish directly from Colab runtime using drive_sync.
+    out = colab_exec(session, DRIVE_PUSH_SCRIPT, 1200)
+    return {
+        "mode": "colab_drive_sync",
+        "done_marker": "COLAB_DRIVE_PUSH_DONE" in out,
+        "tail": "\n".join(out.splitlines()[-40:]),
+    }
 
 
 def main() -> int:
@@ -186,6 +229,11 @@ def main() -> int:
     parser.add_argument("--gpu", default=GPU)
     parser.add_argument("--simulate-ingest", action="store_true", help="Push 9 sandbox rows before queue check")
     parser.add_argument("--min-unprocessed", type=int, default=1)
+    parser.add_argument(
+        "--allow-seed-train",
+        action="store_true",
+        help="Run Colab segment/train even when Hub queue is empty (seed/pg fallback path).",
+    )
     parser.add_argument("--skip-train", action="store_true")
     parser.add_argument("--skip-drive-push", action="store_true")
     args = parser.parse_args()
@@ -211,7 +259,7 @@ def main() -> int:
     report["hub_before_train"] = latest
     unprocessed = int(latest.get("items_unprocessed") or 0)
 
-    if args.skip_train or unprocessed < args.min_unprocessed:
+    if args.skip_train or (unprocessed < args.min_unprocessed and not args.allow_seed_train):
         report["train"] = {"skipped": True, "items_unprocessed": unprocessed}
         print(json.dumps(report, indent=2))
         return 0
