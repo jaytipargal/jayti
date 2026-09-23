@@ -201,19 +201,24 @@ def cmd_pull(folder_id: str, local_root: Path) -> int:
 
 
 def _drive_api_creds():
-    """Best-effort Google credentials with Drive access (Colab or ADC)."""
-    try:
-        from google.colab import auth as colab_auth  # type: ignore
+    """Non-interactive Google credentials only (no Colab UI auth popup)."""
+    # Explicit token JSON in env (rclone-compatible or google oauth token)
+    raw = os.environ.get("GOOGLE_OAUTH_TOKEN_JSON") or os.environ.get("RCLONE_DRIVE_TOKEN")
+    if raw:
+        try:
+            from google.oauth2.credentials import Credentials
 
-        colab_auth.authenticate_user()
-        import google.auth
-
-        creds, _ = google.auth.default(
-            scopes=["https://www.googleapis.com/auth/drive"]
-        )
-        return creds
-    except Exception:
-        pass
+            data = json.loads(raw)
+            return Credentials(
+                token=data.get("access_token") or data.get("token"),
+                refresh_token=data.get("refresh_token"),
+                token_uri=data.get("token_uri", "https://oauth2.googleapis.com/token"),
+                client_id=data.get("client_id"),
+                client_secret=data.get("client_secret"),
+                scopes=["https://www.googleapis.com/auth/drive"],
+            )
+        except Exception as exc:  # noqa: BLE001
+            print("token_json_creds_failed", type(exc).__name__)
     try:
         import google.auth
 
