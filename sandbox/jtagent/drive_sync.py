@@ -70,14 +70,39 @@ def _should_skip(path: Path | str) -> bool:
     return any(frag.lower() in s for frag in SKIP_NAME_FRAGMENTS)
 
 
+def _existing_conf_values() -> dict[str, str]:
+    """Read non-secret and secret keys from an existing rclone conf remote."""
+    conf = _conf_path()
+    out: dict[str, str] = {}
+    if not conf.is_file():
+        return out
+    in_remote = False
+    for line in conf.read_text(encoding="utf-8").splitlines():
+        s = line.strip()
+        if s.startswith("[") and s.endswith("]"):
+            in_remote = s[1:-1] == REMOTE_NAME
+            continue
+        if not in_remote or "=" not in s or s.startswith("#"):
+            continue
+        k, v = s.split("=", 1)
+        out[k.strip()] = v.strip()
+    return out
+
+
 def write_rclone_config(folder_id: str) -> Path:
     """Write a Drive remote rooted at folder_id only."""
     conf = _conf_path()
     conf.parent.mkdir(parents=True, exist_ok=True)
-    # Prefer existing token from env / Colab; otherwise leave for `rclone config reconnect`
-    token = os.environ.get("RCLONE_DRIVE_TOKEN", "").strip()
-    client_id = os.environ.get("RCLONE_DRIVE_CLIENT_ID", "").strip()
-    client_secret = os.environ.get("RCLONE_DRIVE_CLIENT_SECRET", "").strip()
+    # Prefer env / Colab; else keep token already in rclone.conf (OAuth reconnect).
+    existing = _existing_conf_values()
+    token = os.environ.get("RCLONE_DRIVE_TOKEN", "").strip() or existing.get("token", "")
+    client_id = (
+        os.environ.get("RCLONE_DRIVE_CLIENT_ID", "").strip() or existing.get("client_id", "")
+    )
+    client_secret = (
+        os.environ.get("RCLONE_DRIVE_CLIENT_SECRET", "").strip()
+        or existing.get("client_secret", "")
+    )
 
     lines = [
         f"[{REMOTE_NAME}]",
