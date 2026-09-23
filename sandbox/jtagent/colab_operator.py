@@ -68,7 +68,11 @@ def ensure_colab_session(session: str, gpu: str) -> tuple[bool, str]:
     if exists:
         return False, status
     run(_colab_cmd() + ["new", "-s", session, "--gpu", gpu], timeout=600)
+    # A newly-created session can race with status propagation. Treat creation
+    # success as authoritative and continue, then rely on follow-up checks.
     exists, status = colab_status(session)
+    if not exists and "not found" in status.lower():
+        return True, status
     if not exists:
         raise RuntimeError("colab session creation failed")
     return True, status
