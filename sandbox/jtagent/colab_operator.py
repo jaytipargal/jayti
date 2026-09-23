@@ -55,10 +55,11 @@ def _colab_cmd() -> list[str]:
 def colab_status(session: str) -> tuple[bool, str]:
     proc = run(_colab_cmd() + ["status", "-s", session], check=False)
     out = (proc.stdout + proc.stderr).strip()
-    if proc.returncode == 0:
-        return True, out
+    # Some CLI builds print "Session ... not found" with exit 0.
     if "not found" in out.lower():
         return False, out
+    if proc.returncode == 0:
+        return True, out
     raise RuntimeError(out)
 
 
