@@ -65,6 +65,23 @@ On the VPS after copying the script, or paste the file contents into the Vultr w
 ## Automated fix from Cloud Agent
 
 - **vultr-cli**: failed with `401 Unauthorized IP address` (API key IP whitelist).
+
+## Vultr credentials (claude key + API key)
+
+On Vultr the SSH public key is named **`claude key`**. The matching **private** key must live on this machine:
+
+```text
+%USERPROFILE%\.ssh\claude_key   (mode 600)
+```
+
+Set the Vultr API key in the environment (or Cursor Cloud secrets as `VULTR_API_KEY`):
+
+```powershell
+$env:VULTR_API_KEY = '<from Vultr dashboard>'
+python sandbox/jtagent/vps_access.py --probe
+ssh jayti-agent-db "systemctl is-active jayti-retrieval"
+python sandbox/jtagent/vps_access.py --recover
+```
 - **SSH**: failed (`Permission denied (publickey)` — CLAUDE_KEY private key not on this VM).
 - **Remote restart**: not possible without console or whitelisted IP.
 

@@ -305,15 +305,42 @@ def write_category_jsonl(root: Path, chunks: list[dict]) -> dict:
     for cat, rows in sorted(by_cat.items()):
         dest = training / cat / f"{date.today().isoformat()}.jsonl"
         dest.parent.mkdir(parents=True, exist_ok=True)
+        existing: set[str] = set()
+        if dest.is_file():
+            for line in dest.read_text(encoding="utf-8").splitlines():
+                if not line.strip():
+                    continue
+                try:
+                    obj = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                digest = str((obj.get("metadata") or {}).get("content_hash") or "")
+                if digest:
+                    existing.add(digest)
+        unique_rows = []
+        dup_cat = 0
+        for row in rows:
+            digest = str((row.get("metadata") or {}).get("content_hash") or "")
+            if digest and digest in existing:
+                dup_cat += 1
+                continue
+            if digest:
+                existing.add(digest)
+            unique_rows.append(row)
         with dest.open("w", encoding="utf-8") as fh:
-            for row in pad + rows:
+            for row in pad + unique_rows:
                 fh.write(json.dumps(row, ensure_ascii=False, default=str) + "\n")
-        written[cat] = {"path": str(dest), "chunks": len(rows)}
-        print(f"wrote {len(rows)} → {dest}")
+        written[cat] = {
+            "path": str(dest),
+            "chunks": len(unique_rows),
+            "duplicates_removed": dup_cat,
+        }
+        print(f"wrote {len(unique_rows)} -> {dest} duplicates_removed={dup_cat}")
     manifest = {
         "date": date.today().isoformat(),
         "categories": written,
         "total_chunks": sum(v["chunks"] for v in written.values()),
+        "duplicates_removed": sum(v["duplicates_removed"] for v in written.values()),
         "fallback_seed": False,
     }
     (training / "SEGMENT_MANIFEST.json").write_text(
@@ -355,13 +382,21 @@ def run(root: Path | None = None) -> dict:
             items = pull_from_postgres(dsn)
     chunks = []
     skipped = 0
+    seen_hashes: set[str] = set()
+    duplicates = 0
     for item in items:
         chunk = _item_to_chunk(item)
         if chunk is None:
             skipped += 1
             continue
+        digest = str((chunk.get("metadata") or {}).get("content_hash") or "")
+        if digest and digest in seen_hashes:
+            duplicates += 1
+            continue
+        if digest:
+            seen_hashes.add(digest)
         chunks.append(chunk)
-    print(f"chunks={len(chunks)} skipped={skipped}")
+    print(f"chunks={len(chunks)} skipped={skipped} duplicates={duplicates}")
     if not chunks:
         return seed_fallback(root)
     chunks = redact_chunks(chunks)

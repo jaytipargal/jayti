@@ -147,6 +147,7 @@ def pack_devices(root: Path, extra: dict | None = None) -> dict:
                 f"- Adapter: `{adapter or 'pending'}`\n"
                 f"- Push: `{pack['push_command']}`\n"
                 f"- Integrity: {pack['integrity']}\n"
+            "- Attached id: only the Drive owner (jaytipargl.jp@gmail.com) can remove it. The id owner cannot.\n"
             ),
             encoding="utf-8",
         )
