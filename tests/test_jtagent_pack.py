@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 import sys
 
@@ -73,6 +74,22 @@ def test_segment_jsonl_seed_fallback(tmp_path: Path, monkeypatch):
     assert manifest["total_chunks"] >= 1
     cats = list((tmp_path / "training").glob("*/*.jsonl"))
     assert cats
+
+
+def test_item_to_chunk_parses_json_string_content():
+    item = {
+        "device": "jtagent_sandbox",
+        "data_type": "identity",
+        "source": "jtagent-sandbox-seed",
+        "content": json.dumps(
+            {"category": "identity", "title": "agent-name", "input": "who", "output": "jtagent"}
+        ),
+        "content_hash": "abc123abc123",
+    }
+    chunk = segment_jsonl._item_to_chunk(item)
+    assert chunk is not None
+    assert chunk["category"] == "extracted_text"
+    assert chunk["metadata"]["data_type"] == "identity"
 
 
 def test_segment_skips_chrome_sqlite():

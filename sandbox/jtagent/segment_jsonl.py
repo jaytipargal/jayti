@@ -115,10 +115,24 @@ def _should_skip_item(item: dict) -> bool:
     return any(frag.lower() in blob for frag in SKIP_SOURCE_FRAGMENTS)
 
 
+def _coerce_content(content):
+    """Hub JSON and Postgres may store content as a JSON string or an object."""
+    if isinstance(content, str):
+        try:
+            content = json.loads(content)
+        except json.JSONDecodeError:
+            return {"raw": content}
+    if isinstance(content, dict):
+        return content
+    if content is None:
+        return {}
+    return {"raw": content}
+
+
 def _item_to_chunk(item: dict) -> dict | None:
     if _should_skip_item(item):
         return None
-    content = item.get("content", {})
+    content = _coerce_content(item.get("content", {}))
     data_type = item.get("data_type", "unknown")
     device = item.get("device", "unknown")
     source = item.get("source", "unknown")
@@ -230,12 +244,7 @@ def pull_from_postgres(dsn: str) -> list[dict]:
                 "WHERE status = 'new' ORDER BY id ASC LIMIT 10000"
             )
             for row in cur.fetchall():
-                content = row[4]
-                if isinstance(content, str):
-                    try:
-                        content = json.loads(content)
-                    except json.JSONDecodeError:
-                        content = {"raw": content}
+                content = _coerce_content(row[4])
                 items.append(
                     {
                         "id": row[0],
