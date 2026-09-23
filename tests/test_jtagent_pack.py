@@ -88,8 +88,22 @@ def test_item_to_chunk_parses_json_string_content():
     }
     chunk = segment_jsonl._item_to_chunk(item)
     assert chunk is not None
-    assert chunk["category"] == "extracted_text"
+    assert chunk["category"] == "sandbox_ops"
     assert chunk["metadata"]["data_type"] == "identity"
+
+
+def test_item_to_chunk_keeps_device_segments():
+    item = {
+        "device": "samsung_s24_ultra",
+        "data_type": "whatsapp_chat",
+        "source": "push",
+        "content": {"title": "note", "message": "hello"},
+        "content_hash": "def456def456",
+    }
+    chunk = segment_jsonl._item_to_chunk(item)
+    assert chunk is not None
+    assert chunk["category"] == "whatsapp_chat"
+    assert chunk["metadata"]["priority"] == "P1"
 
 
 def test_segment_skips_chrome_sqlite():

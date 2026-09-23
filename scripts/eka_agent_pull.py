@@ -47,6 +47,12 @@ CATEGORY_MAP = {
     "analytics_data": "extracted_text",
     "site_content": "extracted_text",
     "app_install": "infrastructure",
+    "identity": "sandbox_ops",
+    "hub": "sandbox_ops",
+    "drive": "sandbox_ops",
+    "pipeline": "sandbox_ops",
+    "devices": "sandbox_ops",
+    "train": "sandbox_ops",
 }
 
 # Priority mapping
@@ -64,6 +70,12 @@ PRIORITY_MAP = {
     "analytics_data": "P2",
     "site_content": "P2",
     "app_install": "P1",
+    "identity": "P2",
+    "hub": "P2",
+    "drive": "P2",
+    "pipeline": "P2",
+    "devices": "P2",
+    "train": "P2",
 }
 
 def today_str():

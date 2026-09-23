@@ -34,6 +34,14 @@ CATEGORY_MAP = {
     "analytics_data": "extracted_text",
     "site_content": "extracted_text",
     "app_install": "infrastructure",
+    # Sandbox/ops stay one small category so a handful of seed or hub rows
+    # still meet the per-category train minimum. Not a substitute for device ingest.
+    "identity": "sandbox_ops",
+    "hub": "sandbox_ops",
+    "drive": "sandbox_ops",
+    "pipeline": "sandbox_ops",
+    "devices": "sandbox_ops",
+    "train": "sandbox_ops",
 }
 
 PRIORITY_MAP = {
@@ -51,6 +59,12 @@ PRIORITY_MAP = {
     "analytics_data": "P2",
     "site_content": "P2",
     "app_install": "P1",
+    "identity": "P2",
+    "hub": "P2",
+    "drive": "P2",
+    "pipeline": "P2",
+    "devices": "P2",
+    "train": "P2",
 }
 
 SKIP_DATA_TYPES = {

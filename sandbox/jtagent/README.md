@@ -6,7 +6,7 @@ Personal agent **jtagent** (`go4garage01` on Hugging Face) for Jayti’s sandbox
 
 1. **Hub / Postgres** — live Hub at `https://agent.jaytipargal.tech` (`/healthz`, `/status`). Sandbox can also use a dedicated `eka_agent` Postgres (same six tables as `scripts/setup_vps_db.sh`) via `JAYTI_PG_DSN` or gitignored `.local/jayti_pg.dsn`. Never the Global Devices Neon `gd-catalog`.
 2. **Drive (folder only)** — `drive_sync.py` `mount|pull|push` for folder id `1ondyw5YrwXpE6jV48nYpRlg4Z1QkZWUB` → `/content/TAN`. Uses rclone `--drive-root-folder-id`. Does **not** `colab drivemount` all of My Drive.
-3. **Segmented JSONL** — `segment_jsonl.py` pulls Hub `/pull` or `ingestion_queue`, maps via `CATEGORY_MAP`/`PRIORITY_MAP`, redacts with `eka_redact` / `eka_scan_secrets`, writes `training/{category}/`. Falls back to `seed_chunks` **only** if the queue is empty. Skips chrome sqlite / encryption key-derivation / live WhatsApp DBs.
+3. **Segmented JSONL** — `segment_jsonl.py` pulls Hub `/pull` or `ingestion_queue`, maps via `CATEGORY_MAP`/`PRIORITY_MAP`, redacts with `eka_redact` / `eka_scan_secrets`, writes `training/{category}/`. `identity`, `hub`, `drive`, `pipeline`, `devices`, and `train` map to **`sandbox_ops`**. Falls back to `seed_chunks` **only** if the queue is empty. Skips chrome sqlite / encryption key-derivation / live WhatsApp DBs.
 4. **GPT-2 LoRA** — `segment_train.py` trains per category with N≥min_chunks on Colab T4 via `scripts/eka_train.py`. Does **not** full-SFT the ~29.5GB Hub shards. Adapters under `jtagent/adapters/`.
 5. **Device packs** — `devices/{samsung_s24_ultra,asus_vivobook,windows_pc_abcom}/` with adapter paths. `windows_pc_abcom` is Lenovo **NOT_ASUS**.
 
@@ -14,6 +14,7 @@ Personal agent **jtagent** (`go4garage01` on Hugging Face) for Jayti’s sandbox
 
 ```bash
 python sandbox/jtagent/hub_status.py
+python sandbox/jtagent/deploy_smoke.py
 ```
 
 ## Drive sync
