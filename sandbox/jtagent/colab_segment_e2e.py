@@ -14,7 +14,7 @@ from pathlib import Path
 HUB_URL = os.environ.get("JAYTI_HUB_URL", "https://agent.jaytipargal.tech").rstrip("/")
 ROOT = Path(os.environ.get("JTAGENT_ROOT", "/content/TAN/jtagent"))
 ENV_FILE = Path(os.environ.get("JTAGENT_COLAB_ENV", "/content/jtagent-dev.env"))
-BRANCH = os.environ.get("JTAGENT_BRANCH", "cursor/hub-json-content-coerce-7af4")
+BRANCH = os.environ.get("JTAGENT_BRANCH", "main")
 REPO = Path("/content/jayti")
 
 
@@ -49,8 +49,10 @@ def ensure_repo() -> None:
             ]
         )
         return
+    # Fetch requested branch into FETCH_HEAD and reset to it. This works even
+    # when the existing shallow clone has stale or deleted remote-tracking refs.
     subprocess.check_call(["git", "-C", str(REPO), "fetch", "origin", BRANCH])
-    subprocess.check_call(["git", "-C", str(REPO), "reset", "--hard", f"origin/{BRANCH}"])
+    subprocess.check_call(["git", "-C", str(REPO), "reset", "--hard", "FETCH_HEAD"])
 
 
 def mark_processed(cursor: int) -> dict:

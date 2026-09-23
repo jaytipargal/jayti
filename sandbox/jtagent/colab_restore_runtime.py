@@ -11,7 +11,7 @@ from pathlib import Path
 ARCHIVE = Path("/content/jtagent-restore.tgz")
 EXTRACT = Path("/tmp/jtagent-restore")
 REPO = Path("/content/jayti")
-BRANCH = "cursor/hub-json-content-coerce-7af4"
+BRANCH = "main"
 
 
 def ensure_repo() -> None:

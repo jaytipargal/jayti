@@ -140,8 +140,7 @@ def restore_runtime(session: str) -> bool:
     if not archive or archive.stat().st_size == 0:
         return False
     colab_upload(session, archive, "/content/jtagent-restore.tgz")
-    colab_upload(session, RESTORE_SCRIPT, "/tmp/colab_restore_runtime.py")
-    colab_exec(session, Path("/tmp/colab_restore_runtime.py"), 300)
+    colab_exec(session, RESTORE_SCRIPT, 300)
     return True
 
 
@@ -149,8 +148,8 @@ def run_training(session: str) -> str:
     if not ENV_FILE.is_file():
         raise FileNotFoundError(f"missing env file: {ENV_FILE}")
     colab_upload(session, ENV_FILE, "/content/jtagent-dev.env")
-    colab_upload(session, SEGMENT_SCRIPT, "/tmp/colab_segment_e2e.py")
-    out = colab_exec(session, Path("/tmp/colab_segment_e2e.py"), 3600)
+    # Execute checked-in script directly to avoid stale /tmp copies.
+    out = colab_exec(session, SEGMENT_SCRIPT, 3600)
     return out
 
 
@@ -158,8 +157,7 @@ def push_drive_artifacts(session: str) -> dict:
     rclone = shutil.which("rclone")
     if not rclone:
         return {"skipped": "rclone missing"}
-    colab_upload(session, TAR_SCRIPT, "/tmp/colab_tar_artifacts.py")
-    colab_exec(session, Path("/tmp/colab_tar_artifacts.py"), 300)
+    colab_exec(session, TAR_SCRIPT, 300)
     local_tgz = Path("/tmp/jtagent-push/jtagent-artifacts-operator.tgz")
     colab_download(session, "/content/jtagent-artifacts.tgz", local_tgz)
     tree = Path("/tmp/jtagent-push/tree-operator")
