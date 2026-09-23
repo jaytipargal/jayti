@@ -25,11 +25,16 @@ def _pip(pkgs: list[str]) -> None:
 
 
 def _sandbox_dir() -> Path:
-    for p in (
+    candidates = [
         Path("/content/jayti/sandbox/jtagent"),
         Path("/content/sandbox/jtagent"),
-        Path(__file__).resolve().parent,
-    ):
+    ]
+    # colab exec -f runs as a cell: __file__ may be undefined
+    try:
+        candidates.append(Path(__file__).resolve().parent)
+    except NameError:
+        pass
+    for p in candidates:
         if (p / "pack_devices.py").exists():
             return p
     return Path("/content/jayti/sandbox/jtagent")
