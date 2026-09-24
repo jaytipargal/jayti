@@ -69,53 +69,73 @@ _pool: Optional[asyncpg.Pool] = None
 
 # Tables/columns the hub writes. Best-effort: missing audit_trail used to abort
 # register/ingest transactions even when HTTP returned 200.
-_SCHEMA_SQL = """
-CREATE TABLE IF NOT EXISTS device_registry (
+# One execute() per statement: Postgres runs a multi-statement query as one
+# implicit transaction, so any error rolls back the whole batch. The hub's role
+# doesn't own tables that postgres created, so the first ALTER failed and took
+# the CREATEs down with it, leaving audit_trail missing. Run on their own, each
+# statement commits by itself and a failed ALTER can't undo a CREATE.
+_SCHEMA_STATEMENTS = (
+    """CREATE TABLE IF NOT EXISTS device_registry (
     device_id VARCHAR(50) PRIMARY KEY, device_name VARCHAR(100) NOT NULL,
     device_type VARCHAR(30) NOT NULL, os VARCHAR(30) NOT NULL, location VARCHAR(100),
     agent_version VARCHAR(50), last_seen TIMESTAMPTZ, is_active BOOLEAN NOT NULL DEFAULT true,
     apps JSONB NOT NULL DEFAULT '[]'::jsonb, credentials JSONB NOT NULL DEFAULT '[]'::jsonb,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT now(), updated_at TIMESTAMPTZ NOT NULL DEFAULT now());
-CREATE TABLE IF NOT EXISTS ingestion_queue (
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(), updated_at TIMESTAMPTZ NOT NULL DEFAULT now())""",
+    """CREATE TABLE IF NOT EXISTS ingestion_queue (
     id BIGSERIAL PRIMARY KEY, device VARCHAR(50) NOT NULL, source VARCHAR(200) NOT NULL,
     data_type VARCHAR(50) NOT NULL, content JSONB NOT NULL, content_hash VARCHAR(64) NOT NULL UNIQUE,
     device_time TIMESTAMPTZ NOT NULL, ingested_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     status VARCHAR(20) NOT NULL DEFAULT 'new', processed_at TIMESTAMPTZ,
-    priority VARCHAR(5) DEFAULT NULL, hidden_data JSONB DEFAULT NULL);
-CREATE TABLE IF NOT EXISTS audit_trail (
+    priority VARCHAR(5) DEFAULT NULL, hidden_data JSONB DEFAULT NULL)""",
+    """CREATE TABLE IF NOT EXISTS audit_trail (
     log_id BIGSERIAL PRIMARY KEY, timestamp TIMESTAMPTZ NOT NULL DEFAULT now(),
     agent_session VARCHAR(100), device VARCHAR(50), action_type VARCHAR(30) NOT NULL,
     action_detail TEXT, input_ref TEXT, output_ref TEXT, data_affected JSONB, priority VARCHAR(5),
     correlation_ids JSONB, integrity_hash VARCHAR(64), duration_ms INTEGER,
-    status VARCHAR(15) NOT NULL, error TEXT);
-CREATE TABLE IF NOT EXISTS api_keys (
+    status VARCHAR(15) NOT NULL, error TEXT)""",
+    """CREATE TABLE IF NOT EXISTS api_keys (
     key_id UUID PRIMARY KEY, device_id VARCHAR(50) NOT NULL REFERENCES device_registry(device_id),
     key_hash TEXT NOT NULL, key_prefix VARCHAR(16),
     issued_at TIMESTAMPTZ NOT NULL DEFAULT now(), expires_at TIMESTAMPTZ,
-    revoked_at TIMESTAMPTZ, last_used_at TIMESTAMPTZ);
-ALTER TABLE device_registry ADD COLUMN IF NOT EXISTS apps JSONB NOT NULL DEFAULT '[]'::jsonb;
-ALTER TABLE device_registry ADD COLUMN IF NOT EXISTS credentials JSONB NOT NULL DEFAULT '[]'::jsonb;
-ALTER TABLE device_registry ADD COLUMN IF NOT EXISTS agent_version VARCHAR(50);
-ALTER TABLE device_registry ADD COLUMN IF NOT EXISTS location VARCHAR(100);
-ALTER TABLE device_registry ADD COLUMN IF NOT EXISTS last_seen TIMESTAMPTZ;
-ALTER TABLE device_registry ADD COLUMN IF NOT EXISTS is_active BOOLEAN NOT NULL DEFAULT true;
-ALTER TABLE device_registry ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT now();
-ALTER TABLE device_registry ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT now();
-ALTER TABLE api_keys ADD COLUMN IF NOT EXISTS key_prefix VARCHAR(16);
-ALTER TABLE api_keys ADD COLUMN IF NOT EXISTS issued_at TIMESTAMPTZ NOT NULL DEFAULT now();
-ALTER TABLE api_keys ADD COLUMN IF NOT EXISTS expires_at TIMESTAMPTZ;
-ALTER TABLE api_keys ADD COLUMN IF NOT EXISTS revoked_at TIMESTAMPTZ;
-ALTER TABLE api_keys ADD COLUMN IF NOT EXISTS last_used_at TIMESTAMPTZ;
-"""
+    revoked_at TIMESTAMPTZ, last_used_at TIMESTAMPTZ)""",
+    "ALTER TABLE device_registry ADD COLUMN IF NOT EXISTS apps JSONB NOT NULL DEFAULT '[]'::jsonb",
+    "ALTER TABLE device_registry ADD COLUMN IF NOT EXISTS credentials JSONB NOT NULL DEFAULT '[]'::jsonb",
+    "ALTER TABLE device_registry ADD COLUMN IF NOT EXISTS agent_version VARCHAR(50)",
+    "ALTER TABLE device_registry ADD COLUMN IF NOT EXISTS location VARCHAR(100)",
+    "ALTER TABLE device_registry ADD COLUMN IF NOT EXISTS last_seen TIMESTAMPTZ",
+    "ALTER TABLE device_registry ADD COLUMN IF NOT EXISTS is_active BOOLEAN NOT NULL DEFAULT true",
+    "ALTER TABLE device_registry ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT now()",
+    "ALTER TABLE device_registry ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT now()",
+    "ALTER TABLE api_keys ADD COLUMN IF NOT EXISTS key_prefix VARCHAR(16)",
+    "ALTER TABLE api_keys ADD COLUMN IF NOT EXISTS issued_at TIMESTAMPTZ NOT NULL DEFAULT now()",
+    "ALTER TABLE api_keys ADD COLUMN IF NOT EXISTS expires_at TIMESTAMPTZ",
+    "ALTER TABLE api_keys ADD COLUMN IF NOT EXISTS revoked_at TIMESTAMPTZ",
+    "ALTER TABLE api_keys ADD COLUMN IF NOT EXISTS last_used_at TIMESTAMPTZ",
+)
 
 
 async def _ensure_schema(pool: asyncpg.Pool) -> None:
     """Create hub tables/columns if a reinstall left them missing. Never raise."""
+    # flush=True: stdout is block-buffered under systemd, so an unflushed line
+    # would sit unwritten until the worker exits.
+    failed = []
     try:
         async with pool.acquire() as conn:
-            await conn.execute(_SCHEMA_SQL)
-    except Exception:
-        pass
+            # An ALTER on a busy table waits for its ACCESS EXCLUSIVE lock and
+            # queues live traffic behind it; cap the wait so all 13 together stay
+            # under the old single 30s timeout. Pool release runs RESET ALL, so
+            # the setting doesn't leak to other requests.
+            await conn.execute("SET lock_timeout = '2s'")
+            for stmt in _SCHEMA_STATEMENTS:
+                try:
+                    await conn.execute(stmt)
+                except Exception as e:
+                    failed.append(e)
+    except Exception as e:
+        print(f"schema repair: connection error: {type(e).__name__}: {e}", flush=True)
+    if failed:
+        print(f"schema repair: {len(failed)} of {len(_SCHEMA_STATEMENTS)} statements failed; "
+              f"first: {type(failed[0]).__name__}: {failed[0]}", flush=True)
 
 
 @app.on_event("startup")
