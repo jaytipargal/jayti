@@ -167,12 +167,12 @@ def main() -> int:
     tan = find_tan()
     reports = []
     for repo, rtype in [(m, "model") for m in MODELS] + [(d, "dataset") for d in DATASETS]:
-        dest = HF_DOWNLOADS / repo.split("/")[-1]
+        dest = HF_DOWNLOADS / repo.replace("/", "-")
         report = snapshot(repo, rtype, dest)
         reports.append(report)
         if tan is None:
             continue
-        extra = tan / "jtagent" / "hf" / "full" / repo.split("/")[-1]
+        extra = tan / "jtagent" / "hf" / "full" / repo.replace("/", "-")
         if extra.resolve() == dest.resolve():
             continue
         extra.parent.mkdir(parents=True, exist_ok=True)

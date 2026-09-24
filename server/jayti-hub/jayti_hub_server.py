@@ -67,10 +67,62 @@ app = FastAPI(title="Jayti Hub", version="0.2.0")
 _pool: Optional[asyncpg.Pool] = None
 
 
+# Tables/columns the hub writes. Best-effort: missing audit_trail used to abort
+# register/ingest transactions even when HTTP returned 200.
+_SCHEMA_SQL = """
+CREATE TABLE IF NOT EXISTS device_registry (
+    device_id VARCHAR(50) PRIMARY KEY, device_name VARCHAR(100) NOT NULL,
+    device_type VARCHAR(30) NOT NULL, os VARCHAR(30) NOT NULL, location VARCHAR(100),
+    agent_version VARCHAR(50), last_seen TIMESTAMPTZ, is_active BOOLEAN NOT NULL DEFAULT true,
+    apps JSONB NOT NULL DEFAULT '[]'::jsonb, credentials JSONB NOT NULL DEFAULT '[]'::jsonb,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(), updated_at TIMESTAMPTZ NOT NULL DEFAULT now());
+CREATE TABLE IF NOT EXISTS ingestion_queue (
+    id BIGSERIAL PRIMARY KEY, device VARCHAR(50) NOT NULL, source VARCHAR(200) NOT NULL,
+    data_type VARCHAR(50) NOT NULL, content JSONB NOT NULL, content_hash VARCHAR(64) NOT NULL UNIQUE,
+    device_time TIMESTAMPTZ NOT NULL, ingested_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    status VARCHAR(20) NOT NULL DEFAULT 'new', processed_at TIMESTAMPTZ,
+    priority VARCHAR(5) DEFAULT NULL, hidden_data JSONB DEFAULT NULL);
+CREATE TABLE IF NOT EXISTS audit_trail (
+    log_id BIGSERIAL PRIMARY KEY, timestamp TIMESTAMPTZ NOT NULL DEFAULT now(),
+    agent_session VARCHAR(100), device VARCHAR(50), action_type VARCHAR(30) NOT NULL,
+    action_detail TEXT, input_ref TEXT, output_ref TEXT, data_affected JSONB, priority VARCHAR(5),
+    correlation_ids JSONB, integrity_hash VARCHAR(64), duration_ms INTEGER,
+    status VARCHAR(15) NOT NULL, error TEXT);
+CREATE TABLE IF NOT EXISTS api_keys (
+    key_id UUID PRIMARY KEY, device_id VARCHAR(50) NOT NULL REFERENCES device_registry(device_id),
+    key_hash TEXT NOT NULL, key_prefix VARCHAR(16),
+    issued_at TIMESTAMPTZ NOT NULL DEFAULT now(), expires_at TIMESTAMPTZ,
+    revoked_at TIMESTAMPTZ, last_used_at TIMESTAMPTZ);
+ALTER TABLE device_registry ADD COLUMN IF NOT EXISTS apps JSONB NOT NULL DEFAULT '[]'::jsonb;
+ALTER TABLE device_registry ADD COLUMN IF NOT EXISTS credentials JSONB NOT NULL DEFAULT '[]'::jsonb;
+ALTER TABLE device_registry ADD COLUMN IF NOT EXISTS agent_version VARCHAR(50);
+ALTER TABLE device_registry ADD COLUMN IF NOT EXISTS location VARCHAR(100);
+ALTER TABLE device_registry ADD COLUMN IF NOT EXISTS last_seen TIMESTAMPTZ;
+ALTER TABLE device_registry ADD COLUMN IF NOT EXISTS is_active BOOLEAN NOT NULL DEFAULT true;
+ALTER TABLE device_registry ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT now();
+ALTER TABLE device_registry ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT now();
+ALTER TABLE api_keys ADD COLUMN IF NOT EXISTS key_prefix VARCHAR(16);
+ALTER TABLE api_keys ADD COLUMN IF NOT EXISTS issued_at TIMESTAMPTZ NOT NULL DEFAULT now();
+ALTER TABLE api_keys ADD COLUMN IF NOT EXISTS expires_at TIMESTAMPTZ;
+ALTER TABLE api_keys ADD COLUMN IF NOT EXISTS revoked_at TIMESTAMPTZ;
+ALTER TABLE api_keys ADD COLUMN IF NOT EXISTS last_used_at TIMESTAMPTZ;
+"""
+
+
+async def _ensure_schema(pool: asyncpg.Pool) -> None:
+    """Create hub tables/columns if a reinstall left them missing. Never raise."""
+    try:
+        async with pool.acquire() as conn:
+            await conn.execute(_SCHEMA_SQL)
+    except Exception:
+        pass
+
+
 @app.on_event("startup")
 async def _startup():
     global _pool
     _pool = await asyncpg.create_pool(DSN, min_size=1, max_size=8, command_timeout=30)
+    await _ensure_schema(_pool)
 
 
 @app.on_event("shutdown")
@@ -144,9 +196,12 @@ async def _auth(
 
 async def _audit(pool, actor: str, action: str, target: Optional[str], request: Request, details=None):
     """Append to audit_trail. The production audit_trail PK is log_id bigserial;
-    column names follow the production schema."""
+    column names follow the production schema.
+
+    Never call this inside an open transaction: the error is swallowed, but a
+    failed INSERT still aborts that transaction and its COMMIT rolls back.
+    """
     try:
-        ip = request.client.host if request.client else None
         rid = request.headers.get("x-request-id") or str(uuid.uuid4())
         await pool.execute(
             "INSERT INTO audit_trail "
@@ -388,6 +443,7 @@ async def register_device(request: Request, authorization: Optional[str] = Heade
                 "  os = EXCLUDED.os, "
                 "  agent_version = EXCLUDED.agent_version, "
                 "  location = EXCLUDED.location, "
+                "  is_active = TRUE, "
                 "  updated_at = NOW()",
                 device_id,
                 body.get("device_name", device_id),
@@ -401,7 +457,11 @@ async def register_device(request: Request, authorization: Optional[str] = Heade
                 "VALUES ($1, $2, $3, $4, NOW())",
                 str(uuid.uuid4()), device_id, key_hash, prefix,
             )
-            await _audit(pool, "__bootstrap__", "register_device", device_id, request,
-                         {"prefix": prefix})
+        # Audit AFTER the registry/key txn commits. Never call _audit inside the
+        # write transaction while it swallows errors: a failed audit INSERT
+        # aborts the PG transaction, COMMIT then rolls back the device rows,
+        # and this handler would still return the plaintext api_key.
+        await _audit(pool, "__bootstrap__", "register_device", device_id, request,
+                     {"prefix": prefix})
 
     return {"ok": True, "device_id": device_id, "api_key": api_key, "prefix": prefix}

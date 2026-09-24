@@ -54,13 +54,18 @@ def ensure_repo() -> Path:
 def find_hf_model() -> Path | None:
     candidates = [
         Path("/content/drive/MyDrive/HF_Downloads/jt-agent-model"),
+        Path("/content/drive/MyDrive/HF_Downloads/jtagent-jt-agent-model"),
         Path("/content/drive/MyDrive/TAN/jtagent/hf/full/jt-agent-model"),
+        Path("/content/drive/MyDrive/TAN/jtagent/hf/full/jtagent-jt-agent-model"),
         ROOT / "hf" / "full" / "jt-agent-model",
+        ROOT / "hf" / "full" / "jtagent-jt-agent-model",
         Path("/content/TAN/jtagent/hf/full/jt-agent-model"),
+        Path("/content/TAN/jtagent/hf/full/jtagent-jt-agent-model"),
     ]
     my = Path("/content/drive/MyDrive")
     if my.is_dir():
-        candidates.extend(sorted(my.glob("**/jt-agent-model"))[:8])
+        for name in ("jt-agent-model", "jtagent-jt-agent-model"):
+            candidates.extend(sorted(my.glob(f"**/{name}"))[:8])
     for p in candidates:
         if p.is_dir() and all((p / s).is_file() and (p / s).stat().st_size > 1_000_000_000 for s in REQUIRED_SHARDS):
             return p
@@ -70,12 +75,16 @@ def find_hf_model() -> Path | None:
 def find_hf_data() -> Path | None:
     candidates = [
         Path("/content/drive/MyDrive/HF_Downloads/jt-agent-data"),
+        Path("/content/drive/MyDrive/HF_Downloads/jtagent-jt-agent-data"),
         Path("/content/drive/MyDrive/TAN/jtagent/hf/full/jt-agent-data"),
+        Path("/content/drive/MyDrive/TAN/jtagent/hf/full/jtagent-jt-agent-data"),
         ROOT / "hf" / "full" / "jt-agent-data",
+        ROOT / "hf" / "full" / "jtagent-jt-agent-data",
     ]
     my = Path("/content/drive/MyDrive")
     if my.is_dir():
-        candidates.extend(sorted(my.glob("**/jt-agent-data"))[:8])
+        for name in ("jt-agent-data", "jtagent-jt-agent-data"):
+            candidates.extend(sorted(my.glob(f"**/{name}"))[:8])
     for p in candidates:
         if p.is_dir() and any(p.rglob("*.json")):
             return p
@@ -116,8 +125,9 @@ def main() -> int:
     manifest = segment_jsonl.run(ROOT)
     train = segment_train.train_categories(ROOT)
     push_rc = drive_sync.cmd_push(FOLDER_ID, TAN)
+    ok = push_rc == 0
     report = {
-        "ok": True,
+        "ok": ok,
         "ts": datetime.now(timezone.utc).isoformat(),
         "pointer": pointer,
         "segment": manifest,
@@ -127,8 +137,8 @@ def main() -> int:
     }
     (ROOT / "RUN_REPORT.md").write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
     print(json.dumps(report, indent=2))
-    print("AFTER_MOUNT_E2E_DONE")
-    return 0
+    print("AFTER_MOUNT_E2E_DONE" if ok else "AFTER_MOUNT_E2E_FAILED")
+    return 0 if ok else 1
 
 
 if __name__ == "__main__":

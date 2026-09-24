@@ -51,13 +51,13 @@ def main() -> int:
     mount_rc = drive_sync.cmd_mount(FOLDER_ID, TAN)
     push_rc = drive_sync.cmd_push(FOLDER_ID, TAN)
     report = {
-        "ok": push_rc in (0, 2),
+        "ok": push_rc == 0,
         "folder_id": FOLDER_ID,
         "mount_rc": mount_rc,
         "push_rc": push_rc,
     }
     print(json.dumps(report, indent=2))
-    print("COLAB_DRIVE_PUSH_DONE")
+    print("COLAB_DRIVE_PUSH_DONE" if report["ok"] else "COLAB_DRIVE_PUSH_FAILED")
     return 0 if report["ok"] else 1
 
 

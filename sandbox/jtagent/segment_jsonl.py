@@ -305,6 +305,7 @@ def write_category_jsonl(root: Path, chunks: list[dict]) -> dict:
     for cat, rows in sorted(by_cat.items()):
         dest = training / cat / f"{date.today().isoformat()}.jsonl"
         dest.parent.mkdir(parents=True, exist_ok=True)
+        existing_rows: list[str] = []
         existing: set[str] = set()
         if dest.is_file():
             for line in dest.read_text(encoding="utf-8").splitlines():
@@ -317,6 +318,7 @@ def write_category_jsonl(root: Path, chunks: list[dict]) -> dict:
                 digest = str((obj.get("metadata") or {}).get("content_hash") or "")
                 if digest:
                     existing.add(digest)
+                    existing_rows.append(line)
         unique_rows = []
         dup_cat = 0
         for row in rows:
@@ -327,8 +329,14 @@ def write_category_jsonl(root: Path, chunks: list[dict]) -> dict:
             if digest:
                 existing.add(digest)
             unique_rows.append(row)
+        # Preserve existing non-padding rows from prior writes, then merge new
+        # unique rows. Padding is written once at the top of the file.
         with dest.open("w", encoding="utf-8") as fh:
-            for row in pad + unique_rows:
+            for row in pad:
+                fh.write(json.dumps(row, ensure_ascii=False, default=str) + "\n")
+            for line in existing_rows:
+                fh.write(line + "\n")
+            for row in unique_rows:
                 fh.write(json.dumps(row, ensure_ascii=False, default=str) + "\n")
         written[cat] = {
             "path": str(dest),

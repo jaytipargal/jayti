@@ -122,8 +122,12 @@ def push_items(items, device):
 
     try:
         response = json.loads(result.stdout)
+        if not response.get("ok"):
+            # FastAPI errors (401 bad key, 400 unknown device, 500) come back as {"detail": ...}
+            print(f"  [{device}] Push REJECTED: {response.get('detail', result.stdout[:200])}")
+            return {"inserted": 0, "duplicates": 0, "errors": 1}
         print(f"  [{device}] Push result: inserted={response.get('inserted',0)}, "
-              f"duplicates={response.get('duplicates',0)}, "
+              f"duplicates={response.get('duplicate',0)}, "
               f"errors={response.get('errors',0)}")
         return response
     except json.JSONDecodeError:
@@ -327,7 +331,7 @@ def collect_windows_pc_abcom(last_sync):
             cur = conn.cursor()
             cur.execute(
                 f"SELECT url, title, visit_count, last_visit_time FROM urls "
-                f"WHERE last_visit_time > (strftime('%s','{last_sync}') * 1000000 - 11644473600000000)"
+                f"WHERE last_visit_time > (strftime('%s','{last_sync}') * 1000000 + 11644473600000000)"
             )
             for row in cur.fetchall():
                 content = {"type": "chrome_history", "url": row[0], "title": row[1],
@@ -597,8 +601,8 @@ def main():
 
     result = push_items(items, device)
 
-    total_pushed = result.get("inserted", 0)
-    if total_pushed > 0 or len(items) == 0:
+    # Advance on any accepted push; an all-duplicate batch must not pin last_sync.
+    if result.get("ok") or len(items) == 0:
         save_last_sync(device, now)
         print(f"  Updated last_sync to {now}")
 
