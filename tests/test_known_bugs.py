@@ -39,7 +39,7 @@ def test_push_items_cleans_up_payload_file(tmp_path, monkeypatch):
     monkeypatch.setattr(push, "STATE_DIR", str(tmp_path))
     monkeypatch.setattr(
         push.subprocess, "run",
-        lambda *a, **k: _FakeCompleted('{"inserted": 1, "duplicates": 0, "errors": 0}'),
+        lambda *a, **k: _FakeCompleted('{"ok": true, "inserted": 1, "duplicate": 0, "errors": 0}'),
     )
     push.push_items([{"device": "d", "content": {"x": 1}}], "dev")
     leftover = list(tmp_path.glob("push_payload_*.json"))

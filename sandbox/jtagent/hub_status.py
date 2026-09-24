@@ -17,6 +17,7 @@ import urllib.request
 from pathlib import Path
 
 HUB_URL = os.environ.get("EKA_VPS_URL", "https://agent.jaytipargal.tech").rstrip("/")
+HUB_HTTP_FALLBACK = os.environ.get("EKA_VPS_HTTP", "http://139.84.165.81").rstrip("/")
 SANDBOX_DEVICES = ("samsung_s24_ultra", "asus_vivobook", "windows_pc_abcom")
 DSN_CANDIDATES = (
     os.environ.get("JAYTI_PG_DSN", ""),
@@ -36,19 +37,38 @@ def _resolve_dsn() -> str | None:
     return None
 
 
-def _http_json(url: str, timeout: float = 15.0) -> dict:
+def _http_json(url: str, timeout: float = 8.0) -> dict:
     req = urllib.request.Request(url, headers={"Accept": "application/json"})
     with urllib.request.urlopen(req, timeout=timeout) as resp:
         return json.loads(resp.read().decode("utf-8"))
 
 
 def hub_public_status() -> dict:
-    out: dict = {"hub_url": HUB_URL}
+    # Canonical Hub is HTTPS. HTTP :80 stays as fallback (no force-redirect).
+    bases = []
+    for u in (HUB_URL, HUB_HTTP_FALLBACK):
+        if u and u not in bases:
+            bases.append(u)
+    out: dict = {"hub_url": bases[0] if bases else HUB_URL, "hub_url_tried": bases}
+    primary = bases[0] if bases else HUB_URL
+    extra = [b for b in bases[1:]]
     for path in ("/healthz", "/status", "/agent/health", "/retrieval/health"):
-        try:
-            out[path] = _http_json(f"{HUB_URL}{path}")
-        except Exception as exc:  # noqa: BLE001 — status tool must not crash
-            out[path] = {"error": f"{type(exc).__name__}: {exc}"}
+        last_err = None
+        order = [primary] + extra if path in ("/healthz", "/status") else [HUB_URL] + [
+            b for b in bases if b != HUB_URL
+        ]
+        for base in order:
+            try:
+                out[path] = _http_json(f"{base}{path}", timeout=6.0)
+                if base != primary:
+                    out[f"{path}_via"] = base
+                last_err = None
+                break
+            except Exception as exc:  # noqa: BLE001 — status tool must not crash
+                last_err = exc
+                continue
+        if last_err is not None and path not in out:
+            out[path] = {"error": f"{type(last_err).__name__}: {last_err}"}
     return out
 
 

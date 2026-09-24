@@ -1,4 +1,7 @@
 """eka_agent_push: per-device sync-timestamp helpers + push_items empty guard."""
+import inspect
+import sys
+
 import eka_agent_push as push
 
 
@@ -47,7 +50,7 @@ def test_push_sends_device_id_and_key_headers(tmp_path, monkeypatch):
     seen = {}
 
     class _Done:
-        stdout = '{"inserted": 1, "duplicates": 0, "errors": 0}'
+        stdout = '{"ok": true, "inserted": 1, "duplicate": 0, "errors": 0}'
         stderr = ""
         returncode = 0
 
@@ -70,7 +73,7 @@ def test_push_payload_names_the_device(tmp_path, monkeypatch):
     captured = {}
 
     class _Done:
-        stdout = '{"inserted": 1}'
+        stdout = '{"ok": true, "inserted": 1, "duplicate": 0}'
         stderr = ""
         returncode = 0
 
@@ -94,3 +97,66 @@ def test_device_env_file_is_read(tmp_path, monkeypatch):
     values = push._load_device_env()
     assert values["EKA_DEVICE_KEY"] == "jt_from_file"
     assert values["EKA_VPS_URL"] == "https://example.test/"
+
+
+def test_push_rejected_prints_detail_and_errors(tmp_path, monkeypatch, capsys):
+    monkeypatch.setattr(push, "STATE_DIR", str(tmp_path))
+    monkeypatch.setattr(push, "DEVICE_KEY", "jt_secret")
+
+    class _Done:
+        stdout = '{"detail": "bad api key"}'
+        stderr = ""
+        returncode = 0
+
+    monkeypatch.setattr(push.subprocess, "run", lambda *a, **k: _Done())
+    result = push.push_items([{"data_type": "x", "content": {}}], "dev")
+    assert result == {"inserted": 0, "duplicates": 0, "errors": 1}
+    assert "REJECTED" in capsys.readouterr().out
+
+
+def test_push_reads_hub_duplicate_field(tmp_path, monkeypatch, capsys):
+    monkeypatch.setattr(push, "STATE_DIR", str(tmp_path))
+    monkeypatch.setattr(push, "DEVICE_KEY", "jt_secret")
+
+    class _Done:
+        stdout = '{"ok": true, "inserted": 0, "duplicate": 12}'
+        stderr = ""
+        returncode = 0
+
+    monkeypatch.setattr(push.subprocess, "run", lambda *a, **k: _Done())
+    result = push.push_items([{"data_type": "x", "content": {}}], "dev")
+    assert result["ok"] is True
+    assert result["duplicate"] == 12
+    assert "duplicates=12" in capsys.readouterr().out
+
+
+def test_main_advances_last_sync_when_all_duplicates(tmp_path, monkeypatch):
+    monkeypatch.setattr(push, "STATE_DIR", str(tmp_path))
+    monkeypatch.setattr(
+        push, "COLLECTORS", {"windows_pc_abcom": lambda last: [{"data_type": "x"}]}
+    )
+    monkeypatch.setattr(
+        push, "push_items", lambda items, device: {"ok": True, "inserted": 0, "duplicate": 1}
+    )
+    monkeypatch.setattr(sys, "argv", ["eka_agent_push.py", "--device", "windows_pc_abcom"])
+    push.main()
+    assert push.get_last_sync("windows_pc_abcom") != "1970-01-01T00:00:00Z"
+
+
+def test_main_does_not_advance_last_sync_on_reject(tmp_path, monkeypatch):
+    monkeypatch.setattr(push, "STATE_DIR", str(tmp_path))
+    monkeypatch.setattr(
+        push, "COLLECTORS", {"windows_pc_abcom": lambda last: [{"data_type": "x"}]}
+    )
+    monkeypatch.setattr(
+        push, "push_items", lambda items, device: {"inserted": 0, "duplicates": 0, "errors": 1}
+    )
+    monkeypatch.setattr(sys, "argv", ["eka_agent_push.py", "--device", "windows_pc_abcom"])
+    push.main()
+    assert push.get_last_sync("windows_pc_abcom") == "1970-01-01T00:00:00Z"
+
+
+def test_chrome_history_converts_unix_to_webkit_with_plus():
+    src = inspect.getsource(push.collect_windows_pc_abcom)
+    assert "* 1000000 + 11644473600000000" in src
+    assert "* 1000000 - 11644473600000000" not in src

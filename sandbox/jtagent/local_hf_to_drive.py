@@ -49,12 +49,13 @@ SEARCH_ROOTS = (
     Path(r"D:\training-data\target_directory"),
     Path(r"D:\training-data"),
     Path(r"D:\tmp\jt-hf-full\hf-complete"),
-    Path(r"D:\tmp\jt-hf-full\jt-agent-model"),
+    Path(r"D:\tmp\jt-hf-full\model"),
     Path(r"D:\tmp\jt-hf-full\jt-agent-model-http"),
 )
 DATA_ROOTS = (
     Path(r"D:\tmp\jt-hf-full\jt-agent-data"),
     Path(r"D:\training-data\jt-agent-data"),
+    Path(r"D:\tmp\jt-hf-full\hf-complete"),
 )
 
 
@@ -113,7 +114,7 @@ def inventory() -> dict:
 
 
 def upload(inv: dict) -> dict:
-    staging = Path(r"D:\tmp\jt-hf-full\drive-stage\jt-agent-model")
+    staging = Path(r"D:\tmp\jt-hf-full\drive-stage\jtagent-jt-agent-model")
     staging.mkdir(parents=True, exist_ok=True)
     for name, meta in inv["found"].items():
         dest = staging / name
@@ -122,41 +123,38 @@ def upload(inv: dict) -> dict:
             continue
         print(f"stage {src} -> {dest}")
         shutil.copy2(src, dest)
-    rc_model = rclone(
-        "copy",
-        "--size-only",
-        str(staging),
-        f"{REMOTE}:jtagent/hf/full/jt-agent-model",
-    ).returncode
-    rc_model2 = rclone(
-        "copy",
-        "--size-only",
-        str(staging),
-        f"{REMOTE}:HF_Downloads/jt-agent-model",
-    ).returncode
-    rc_data = 0
-    rc_data2 = 0
+    model_rcs = [
+        rclone("copy", "--size-only", str(staging), dest).returncode
+        for dest in (
+            f"{REMOTE}:jtagent/hf/full/jt-agent-model",
+            f"{REMOTE}:jtagent/hf/full/jtagent-jt-agent-model",
+            f"{REMOTE}:HF_Downloads/jt-agent-model",
+            f"{REMOTE}:HF_Downloads/jtagent-jt-agent-model",
+        )
+    ]
+    data_rcs: list[int] = []
     if inv["data_dir"]:
-        rc_data = rclone(
-            "copy",
-            "--size-only",
-            inv["data_dir"],
-            f"{REMOTE}:jtagent/hf/full/jt-agent-data",
-            "--exclude",
-            ".cache/**",
-        ).returncode
-        rc_data2 = rclone(
-            "copy",
-            "--size-only",
-            inv["data_dir"],
-            f"{REMOTE}:HF_Downloads/jt-agent-data",
-            "--exclude",
-            ".cache/**",
-        ).returncode
+        data_rcs = [
+            rclone(
+                "copy",
+                "--size-only",
+                inv["data_dir"],
+                dest,
+                "--exclude",
+                ".cache/**",
+            ).returncode
+            for dest in (
+                f"{REMOTE}:jtagent/hf/full/jt-agent-data",
+                f"{REMOTE}:jtagent/hf/full/jtagent-jt-agent-data",
+                f"{REMOTE}:HF_Downloads/jt-agent-data",
+                f"{REMOTE}:HF_Downloads/jtagent-jt-agent-data",
+            )
+        ]
+    all_rcs = model_rcs + data_rcs
     return {
-        "model_rc": [rc_model, rc_model2],
-        "data_rc": [rc_data, rc_data2],
-        "ok": max(rc_model, rc_model2, rc_data, rc_data2) == 0,
+        "model_rc": model_rcs,
+        "data_rc": data_rcs,
+        "ok": not all_rcs or max(all_rcs) == 0,
     }
 
 

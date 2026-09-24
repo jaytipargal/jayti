@@ -22,10 +22,17 @@ SSH_KEY = Path.home() / ".ssh" / "claude_key"
 RECOVERY_SCRIPT = Path(__file__).resolve().parent / "vps_retrieval_recovery.sh"
 
 
+def _vultr_api_key() -> str:
+    return (
+        os.environ.get("VULTR_API_KEY", "").strip()
+        or os.environ.get("VULTR_KEY", "").strip()
+    )
+
+
 def _vultr_request(path: str) -> tuple[int, dict | str]:
-    key = os.environ.get("VULTR_API_KEY", "").strip()
+    key = _vultr_api_key()
     if not key:
-        return 0, {"error": "VULTR_API_KEY not set"}
+        return 0, {"error": "VULTR_API_KEY / VULTR_KEY not set"}
     req = urllib.request.Request(
         f"https://api.vultr.com/v2{path}",
         headers={"Authorization": f"Bearer {key}", "Accept": "application/json"},
