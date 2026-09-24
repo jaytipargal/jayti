@@ -1,0 +1,21 @@
+[Unit]
+Description=jtagent personal agent (retrieval-grounded, GPT-2 LoRA)
+After=network.target jayti-retrieval.service jayti-hub.service
+
+[Service]
+Type=simple
+# hub.env supplies JAYTI_PG_DSN + JAYTI_BOOTSTRAP_KEY; agent.env holds only
+# non-secret settings (adapter path, URLs). The API key is read from nginx.
+EnvironmentFile=/etc/jayti/hub.env
+EnvironmentFile=-/etc/jayti/agent.env
+Environment=OMP_NUM_THREADS=2
+Environment=HF_HOME=/opt/jayti/agent/hf-cache
+ExecStart=/opt/jayti/retrieval/venv/bin/python -m uvicorn jtagent_server:app \
+    --host 127.0.0.1 --port 8000 --workers 1
+WorkingDirectory=/opt/jayti/agent
+Restart=on-failure
+RestartSec=10
+User=root
+
+[Install]
+WantedBy=multi-user.target
