@@ -6,9 +6,10 @@ The id owner, the agent, and every other account cannot remove one.
 from __future__ import annotations
 
 # Drive owner = the Google account that owns the TAN folder and syncs S24 +
-# VivoBook (jaytipargal.jp, WITH the second "a"). Distinct from the GitHub/HF/
-# Colab login (jaytipargl.jp, no "a"). Only this account may detach a device.
-DRIVE_OWNER_EMAIL = "jaytipargal.jp@gmail.com"
+# VivoBook: jaytipargl.jp@gmail.com (no second "a") — also the Colab login.
+# The GitHub handle (jaytipargal/jayti) and the agent.jaytipargal.tech domain
+# carry the "a"; don't confuse them. Only this account may detach a device.
+DRIVE_OWNER_EMAIL = "jaytipargl.jp@gmail.com"
 ATTACHED_DEVICE_IDS = (
     "samsung_s24_ultra",
     "asus_vivobook",

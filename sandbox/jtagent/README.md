@@ -79,4 +79,4 @@ The VPS keeps GPT-2 adapters via `vps_install_agent.sh` + `vps_agent_sync.sh`.
 
 Llama 3.2 1B/3B Unsloth QLoRA → GGUF/ExecuTorch → sqlite-vec CRDT → Ollama Modelfile / Termux. Prefer documenting over implementing when T4 memory conflicts with GPT-2 LoRA E2E.
 
-Physical S24 / VivoBook pick adapters up when Drive syncs `jaytipargal.jp@gmail.com`. This Cloud Agent does not claim those devices online without evidence.
+Physical S24 / VivoBook pick adapters up when Drive syncs `jaytipargl.jp@gmail.com`. This Cloud Agent does not claim those devices online without evidence.

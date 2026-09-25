@@ -6,8 +6,9 @@ accounts/hardware; none of it runs from CI.
 
 > Branch: while PR #13 is open, clone `claude/gifted-ride-qn610c`. After it
 > merges, use `main`.
-> Drive owner = `jaytipargal.jp@gmail.com` (with "a"). GitHub/HF/Colab login =
-> `jaytipargl.jp@gmail.com` (no "a").
+> Drive owner + Colab Google account = `jaytipargl.jp@gmail.com` (no "a"). The
+> GitHub repo (`jaytipargal/jayti`) and the `agent.jaytipargal.tech` domain carry
+> the "a"; HF is user `jtagent`. Don't confuse the spellings.
 
 ---
 
@@ -16,7 +17,7 @@ accounts/hardware; none of it runs from CI.
 1. **Colab Pro A100** — open the notebook, Runtime → Change runtime type → **A100 GPU**.
 2. **HF token** (write) at <https://huggingface.co/settings/tokens>. In Colab, save it as a secret named `HF_TOKEN` (the notebook reads it), or `os.environ["HF_TOKEN"]=...`.
 3. **Make the personal HF data repos private** (HF → each repo → Settings → Change visibility): `jtagent/jt-agent-data`, `jtagent/chrome-browser-data`, `jtagent/jt-agent-dataset`.
-4. **rclone remote for the TAN Drive** — once, on **each** machine that syncs (Colab, VPS, VivoBook), authorized as the **Drive-owner** account (`jaytipargal.jp`):
+4. **rclone remote for the TAN Drive** — once, on **each** machine that syncs (Colab, VPS, VivoBook), authorized as the **Drive-owner** account (`jaytipargl.jp`):
    ```bash
    rclone config create jtagent_tan drive \
      scope=drive root_folder_id=1ondyw5YrwXpE6jV48nYpRlg4Z1QkZWUB

@@ -72,7 +72,7 @@ def seed_chunks() -> list[dict]:
             "title": "tan-folder",
         },
         {
-            "input": "Which devices belong to jaytipargal.jp@gmail.com in this sandbox?",
+            "input": "Which devices belong to jaytipargl.jp@gmail.com in this sandbox?",
             "output": json.dumps(
                 {
                     "samsung_s24_ultra": "phone; Drive + Termux push agent",
