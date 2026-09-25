@@ -55,6 +55,26 @@ Operator helpers committed in this repo:
 - `DEVICE_PUSH.md` (physical node push commands)
 - `edge_deploy/` (Vivobook Modelfile + S24 Termux runner templates)
 
+## QLoRA path (7-8B → GGUF) — capable model for the devices
+
+The GPT-2 LoRA path above stays as the light VPS responder. For a capable
+assistant that runs on the VivoBook, fine-tune a real trainable base and export
+GGUF (needs Colab Pro **A100**; the 29.5 GB `go4garage01/jt-agent-model` is an
+MLX/Qwen3-VL bundle and is **not** a train target):
+
+```bash
+# One-shot on the Colab GPU VM (after Drive mount + repo clone):
+JTAGENT_BASE_MODEL=Qwen/Qwen2.5-7B-Instruct JTAGENT_QUANT=Q4_K_M \
+LLAMA_CPP_DIR=/content/llama.cpp \
+python sandbox/jtagent/colab_qlora_e2e.py
+```
+
+Pieces: `qlora_train.py` (4-bit QLoRA, one unified adapter), `export_gguf.py`
+(merge → GGUF → quantize), `hf_publish.py` (private HF publish), then
+`drive_sync.py push` sends `jtagent/{adapters,gguf,devices}` to the TAN folder.
+Devices pick up the GGUF with `edge_deploy/vivobook/pull_and_build.{sh,ps1}`.
+The VPS keeps GPT-2 adapters via `vps_install_agent.sh` + `vps_agent_sync.sh`.
+
 ## Follow-on (not this pass)
 
 Llama 3.2 1B/3B Unsloth QLoRA → GGUF/ExecuTorch → sqlite-vec CRDT → Ollama Modelfile / Termux. Prefer documenting over implementing when T4 memory conflicts with GPT-2 LoRA E2E.

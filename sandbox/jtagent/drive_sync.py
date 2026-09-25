@@ -31,6 +31,7 @@ PUSH_REL_PATHS = (
     "jtagent/hf",
     "jtagent/training",
     "jtagent/adapters",
+    "jtagent/gguf",
     "jtagent/devices",
     "jtagent/RUN_REPORT.md",
 )

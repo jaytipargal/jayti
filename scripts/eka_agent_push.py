@@ -352,11 +352,82 @@ def collect_windows_pc_abcom(last_sync):
 
 
 def collect_asus_vivobook(last_sync):
-    """Collect new data from Asus VivoBook (run locally on VivoBook)."""
+    """Collect new data from the ASUS VivoBook (runs locally on the VivoBook).
+
+    The VivoBook runs Windows, so on `os.name == "nt"` we watch the user profile
+    folders and Chrome history (like windows_pc_abcom). The POSIX branch (home +
+    /var/log scan) is kept so the collector still works if the box is booted into
+    Linux or run under WSL.
+    """
     items = []
     last_ts = datetime.fromisoformat(last_sync.replace("Z", "+00:00")).timestamp()
 
-    # Scan home directory for new files
+    if os.name == "nt":
+        # Windows: watch the common user folders for new/changed files.
+        watch_dirs = [
+            os.path.expanduser("~/Desktop"),
+            os.path.expanduser("~/Documents"),
+            os.path.expanduser("~/Downloads"),
+        ]
+        for watch_dir in watch_dirs:
+            if not os.path.exists(watch_dir):
+                continue
+            for root, dirs, files in os.walk(watch_dir):
+                for fname in files:
+                    fpath = os.path.join(root, fname)
+                    try:
+                        mtime = os.path.getmtime(fpath)
+                        if mtime > last_ts and os.path.getsize(fpath) < 10_000_000:
+                            content = {
+                                "type": "file_change",
+                                "path": fpath,
+                                "filename": fname,
+                                "size_bytes": os.path.getsize(fpath),
+                                "modified": datetime.fromtimestamp(mtime, tz=timezone.utc).isoformat(),
+                            }
+                            items.append({
+                                "device": "asus_vivobook",
+                                "source": "file_scan",
+                                "data_type": "file_change",
+                                "content": content,
+                                "device_time": datetime.fromtimestamp(mtime, tz=timezone.utc).isoformat(),
+                                "content_hash": compute_hash(content),
+                            })
+                    except OSError:
+                        pass
+
+        # Chrome history (SQLite copy read read-only via URI).
+        try:
+            chrome_history = os.path.expanduser(
+                "~/AppData/Local/Google/Chrome/User Data/Default/History"
+            )
+            if os.path.exists(chrome_history):
+                import sqlite3 as sq
+                conn = sq.connect(f"file:{chrome_history}?mode=ro&immutable=1", uri=True)
+                cur = conn.cursor()
+                cur.execute(
+                    "SELECT url, title, visit_count, last_visit_time FROM urls "
+                    "WHERE last_visit_time > (strftime('%s', ?) * 1000000 + 11644473600000000)",
+                    (last_sync,),
+                )
+                for row in cur.fetchall():
+                    content = {"type": "chrome_history", "url": row[0], "title": row[1],
+                               "visit_count": row[2]}
+                    items.append({
+                        "device": "asus_vivobook",
+                        "source": "chrome_history",
+                        "data_type": "browser_data",
+                        "content": content,
+                        "device_time": datetime.now(timezone.utc).isoformat(),
+                        "content_hash": compute_hash(content),
+                    })
+                conn.close()
+        except Exception as e:
+            print(f"  [chrome] Error: {e}")
+
+        return items
+
+    # POSIX fallback (Linux boot / WSL): scan home + /var/log.
     for root, dirs, files in os.walk(os.path.expanduser("~")):
         # Skip hidden dirs and common large dirs
         dirs[:] = [d for d in dirs if not d.startswith(".") and d not in ("cache", ".cache", "snap")]

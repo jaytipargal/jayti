@@ -1,24 +1,40 @@
-# Edge inference deploy stubs (Vivobook + Samsung S24)
+# Edge inference deploy (VivoBook + Samsung S24)
 
-These files are deployment templates for the artifacts produced under
-`/content/TAN/jtagent/adapters/`.
+Runs the QLoRA-fine-tuned jtagent (exported to GGUF by
+`sandbox/jtagent/export_gguf.py`, pushed to the TAN Drive folder under
+`jtagent/gguf/`) on the physical devices. The ~4.5 GB Q4_K_M 7-8B model lives on
+the **VivoBook**; the small VPS keeps the retrieval-grounded GPT-2 responder.
 
-## Vivobook (Ollama)
+## VivoBook (Ollama) — dual-boot
 
-1. Pull the exported GGUF model to the VivoBook local filesystem.
-2. Copy `vivobook/Modelfile.template` to `Modelfile` and set the local GGUF path.
-3. Build + run:
+The VivoBook boots both Windows and Linux; use whichever matches the session.
+Both scripts pull the newest GGUF from Drive, write a `Modelfile` from
+`vivobook/Modelfile.template`, and `ollama create jtagent`:
 
 ```bash
-ollama create jtagent-edge -f Modelfile
-ollama run jtagent-edge
+# Linux / WSL
+bash vivobook/pull_and_build.sh
+ollama run jtagent
 ```
+
+```powershell
+# Windows
+powershell -ExecutionPolicy Bypass -File .\vivobook\pull_and_build.ps1
+ollama run jtagent
+```
+
+Prereqs: `rclone config reconnect jtagent_tan` once (Drive OAuth), and Ollama
+installed.
 
 ## Samsung S24 (Termux + llama.cpp)
 
-1. Pull quantized GGUF artifact from Drive into Termux storage.
-2. Install llama.cpp binary in Termux.
-3. Run `s24/termux-run.sh` with the GGUF path.
+A 4.5 GB Q4 model is heavy for a phone. Either export a smaller quant (e.g.
+`--quant Q3_K_M` / a ≤3B base) for the S24, or have the phone query the
+VivoBook/VPS. To run locally:
 
-> `.pte` / ExecuTorch binaries are generated in a separate export pass when the
-> mobile runtime toolchain is available.
+1. Pull the quantized GGUF from the synced Drive into Termux storage.
+2. Install the `llama.cpp` `llama-cli` binary in Termux.
+3. `bash s24/termux-run.sh /path/to/jt-agent.gguf "your prompt"`.
+
+> `.pte` / ExecuTorch mobile binaries are a separate export pass when the mobile
+> runtime toolchain is available.
