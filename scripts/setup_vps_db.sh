@@ -176,7 +176,7 @@ INSERT INTO device_registry (device_id, device_name, device_type, os, location, 
 
 -- Seed mobility map (24 emails)
 INSERT INTO mobility_map (email, owner, email_type, devices) VALUES
-('jaytipargal.jp@gmail.com', 'Jayti Pargal', 'personal', '["samsung-s24-ultra","windows-pc-abcom","jp-drivebackup"]'),
+('jaytipargl.jp@gmail.com', 'Jayti Pargal', 'personal', '["samsung-s24-ultra","windows-pc-abcom","jp-drivebackup"]'),
 ('pargaljayati.06@gmail.com', 'Jayti Pargal', 'personal', '["samsung-s24-ultra","windows-pc-abcom"]'),
 ('santoshpargal@yahoo.com', 'Santosh Pargal', 'family', '["windows-pc-abcom"]'),
 ('jayti@jaytipargal.in', 'Jayti Pargal', 'business', '["jp-birthday-site-server"]'),
