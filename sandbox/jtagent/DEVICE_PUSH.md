@@ -81,13 +81,18 @@ Optional daily cron via **Termux:Boot** + `crond` (same `0 0 * * *` line as Linu
 
 ---
 
-## Asus VivoBook (Linux)
+## Asus VivoBook (dual-boot: Linux or Windows)
+
+The VivoBook boots both Linux and Windows. `collect_asus_vivobook` auto-detects
+the OS: on Windows it scans `Desktop/Documents/Downloads` + Chrome history; on
+Linux it scans the home dir + `/var/log`. Use the setup below that matches the
+booted OS (env path differs).
 
 | Field | Value |
 |-------|-------|
 | **device_id** | `asus_vivobook` |
 | **Hub URL** | `https://agent.jaytipargal.tech` |
-| **env path** | `/etc/eka-agent/device.env` or `~/.eka_agent/device.env` |
+| **env path** | Linux `/etc/eka-agent/device.env` or `~/.eka_agent/device.env`; Windows `%USERPROFILE%\.eka_agent\device.env` |
 | **push command** | `python3 eka_agent_push.py --device asus_vivobook` |
 
 ### One-time setup
@@ -115,7 +120,13 @@ python3 eka_agent_push.py --device asus_vivobook
 (crontab -l 2>/dev/null | grep -v eka_agent_push; echo "0 0 * * * /usr/bin/python3 /usr/local/bin/eka_agent_push.py --device asus_vivobook >> ~/.eka_agent/push.log 2>&1") | crontab -
 ```
 
-**Collectors:** home-directory file deltas (<10 MB), `/var/log` changes → `file_change`, `system_logs`.
+On **Windows** boot, use the same one-time setup as `windows_pc_abcom` below but
+with `EKA_DEVICE_ID=asus_vivobook` (env at `%USERPROFILE%\.eka_agent\device.env`),
+then schedule with Task Scheduler instead of cron.
+
+**Collectors (auto-detected):** Linux — home-directory file deltas (<10 MB) +
+`/var/log` → `file_change`, `system_logs`; Windows — `Desktop/Documents/Downloads`
++ Chrome history → `file_change`, `browser_data`.
 
 **Integrity:** Liveness for **ASUS VivoBook** may only be claimed from this hardware.
 

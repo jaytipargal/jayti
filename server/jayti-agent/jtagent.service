@@ -10,7 +10,12 @@ EnvironmentFile=/etc/jayti/hub.env
 EnvironmentFile=-/etc/jayti/agent.env
 Environment=OMP_NUM_THREADS=2
 Environment=HF_HOME=/opt/jayti/agent/hf-cache
-ExecStart=/opt/jayti/retrieval/venv/bin/python -m uvicorn jtagent_server:app \
+# Best-effort adapter sync from the TAN Drive before start ('-' = ignore failure
+# so a Drive/rclone hiccup never blocks the agent). Installed by vps_install_agent.sh.
+ExecStartPre=-/opt/jayti/agent/vps_agent_sync.sh
+# Dedicated agent venv (created by sandbox/jtagent/vps_install_agent.sh) — the
+# retrieval venv does not carry torch/transformers/peft.
+ExecStart=/opt/jayti/agent/venv/bin/python -m uvicorn jtagent_server:app \
     --host 127.0.0.1 --port 8000 --workers 1
 WorkingDirectory=/opt/jayti/agent
 Restart=on-failure
