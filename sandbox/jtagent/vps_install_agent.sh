@@ -28,10 +28,11 @@ fi
 # CPU-only torch keeps the small VPS light; the 7-8B model runs on the VivoBook,
 # not here — this venv only serves the retrieval-grounded GPT-2 responder.
 "${VENV}/bin/pip" install --upgrade pip -q
-"${VENV}/bin/pip" install -q \
-  "fastapi" "uvicorn[standard]" "httpx" \
-  "torch --index-url https://download.pytorch.org/whl/cpu" 2>/dev/null || \
-  "${VENV}/bin/pip" install -q "torch"
+"${VENV}/bin/pip" install -q "fastapi" "uvicorn[standard]" "httpx"
+# CPU-only torch from the CPU wheel index (must be its own args, not one string);
+# fall back to the default wheel if that index is unreachable.
+"${VENV}/bin/pip" install -q torch --index-url https://download.pytorch.org/whl/cpu \
+  || "${VENV}/bin/pip" install -q torch
 "${VENV}/bin/pip" install -q "transformers>=4.44" "peft>=0.12" "accelerate>=0.33" "huggingface_hub"
 
 # Copy the server + sync helper next to the venv if the repo is present.
