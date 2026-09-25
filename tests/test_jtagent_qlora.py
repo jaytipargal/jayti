@@ -174,6 +174,24 @@ def test_publish_dry_run_is_private_and_uploads_nothing(tmp_path):
     assert report["adapter_files"] == 1
 
 
+def test_adapter_path_in_repo_is_versioned_by_run_dir(tmp_path):
+    run = tmp_path / "adapters" / "adapter_2026-09-25_qlora"
+    final = run / "final"
+    final.mkdir(parents=True)
+    # A `final/` leaf versions by its run dir; a bare run dir versions by itself.
+    assert hf_publish.adapter_version(final) == "adapter_2026-09-25_qlora"
+    assert hf_publish.adapter_path_in_repo(final) == "adapter/adapter_2026-09-25_qlora"
+    assert hf_publish.adapter_path_in_repo(run) == "adapter/adapter_2026-09-25_qlora"
+    # Two runs never share a Hub path, so a later publish can't overwrite an earlier one.
+    other = tmp_path / "adapters" / "adapter_2026-09-26_qlora" / "final"
+    other.mkdir(parents=True)
+    assert hf_publish.adapter_path_in_repo(other) != hf_publish.adapter_path_in_repo(final)
+    # The dry-run report surfaces the versioned path before anything uploads.
+    (final / "adapter_config.json").write_text("{}", encoding="utf-8")
+    report = hf_publish.publish(final, dry_run=True)
+    assert report["adapter_path_in_repo"] == "adapter/adapter_2026-09-25_qlora"
+
+
 def test_resolve_token_prefers_env(monkeypatch):
     monkeypatch.setenv("HF_TOKEN", "hf_abc")
     assert hf_publish.resolve_token() == "hf_abc"

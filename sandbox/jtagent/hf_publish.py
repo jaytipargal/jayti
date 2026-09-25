@@ -5,6 +5,10 @@ Keeps trained artifacts versioned on the Hub for the `jtagent` / `go4garage01`
 account. Repos are created private by default — this pipeline handles personal
 data, so public is never the default.
 
+The adapter lands under a versioned `adapter/<run>/` path (e.g.
+`adapter/adapter_2026-09-25_qlora/`) so a later publish never overwrites an
+earlier one; the GGUF is versioned by its dated filename under `gguf/`.
+
 `huggingface_hub` is imported lazily inside the functions that need it, because
 the offline test suite does not stub it; the pure helpers below import cleanly.
 
@@ -66,6 +70,20 @@ def select_upload_files(adapter_dir: Path | None, gguf_path: Path | None = None)
     return plan
 
 
+def adapter_version(adapter_dir: Path) -> str:
+    """Version name for an adapter dir: the run dir when the leaf is `final`,
+    else the leaf itself — .../adapter_2026-09-25_qlora/final -> adapter_2026-09-25_qlora."""
+    adapter_dir = Path(adapter_dir)
+    if adapter_dir.name == "final" and adapter_dir.parent.name:
+        return adapter_dir.parent.name
+    return adapter_dir.name
+
+
+def adapter_path_in_repo(adapter_dir: Path) -> str:
+    """Versioned Hub path, so publishing a new run can't overwrite an old one."""
+    return f"adapter/{adapter_version(adapter_dir)}"
+
+
 def publish(
     adapter_dir: Path | None,
     gguf_path: Path | None = None,
@@ -79,6 +97,7 @@ def publish(
     report = {
         "repo_id": repo_id,
         "private": private,
+        "adapter_path_in_repo": adapter_path_in_repo(adapter_dir) if adapter_dir else None,
         "adapter_files": len(plan["adapter"]),
         "gguf_files": len(plan["gguf"]),
         "dry_run": dry_run,
@@ -108,7 +127,7 @@ def publish(
         upload_folder(
             repo_id=repo_id,
             folder_path=str(adapter_dir),
-            path_in_repo="adapter",
+            path_in_repo=adapter_path_in_repo(adapter_dir),
             token=token,
             commit_message="Publish jtagent LoRA adapter",
         )
