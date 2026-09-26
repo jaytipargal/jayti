@@ -17,13 +17,15 @@ accounts/hardware; none of it runs from CI.
 1. **Colab Pro A100** — open the notebook, Runtime → Change runtime type → **A100 GPU**.
 2. **HF token** (write) at <https://huggingface.co/settings/tokens>. In Colab, save it as a secret named `HF_TOKEN` (the notebook reads it), or `os.environ["HF_TOKEN"]=...`.
 3. **Make the personal HF data repos private** (HF → each repo → Settings → Change visibility): `jtagent/jt-agent-data`, `jtagent/chrome-browser-data`, `jtagent/jt-agent-dataset`.
-4. **rclone remote for the TAN Drive** — once, on **each** machine that syncs (Colab, VPS, VivoBook), authorized as the **Drive-owner** account (`jaytipargl.jp`):
-   ```bash
-   rclone config create jtagent_tan drive \
-     scope=drive root_folder_id=1ondyw5YrwXpE6jV48nYpRlg4Z1QkZWUB
-   # follow the browser OAuth prompt; then verify:
-   rclone lsd jtagent_tan:
-   ```
+4. **rclone remote for the TAN Drive** — once, on **each** machine that syncs (Colab, VPS, VivoBook, S24). Two options:
+   - **Headless service account (devices, unattended):** in the `info@kailash-ai.com` GCloud project (Drive API enabled; `jaytipargal.jp` is admin) create a service account and download its JSON key; share the TAN folder with the service account's email (reader suffices to pull); then on the device run `edge_deploy/configure_rclone_sa.sh <key.json>` (or the `.ps1` on Windows). Equivalent for `drive_sync.py`: `RCLONE_DRIVE_SERVICE_ACCOUNT_FILE=<key.json>`.
+   - **Interactive OAuth** (Colab/VPS), as a TAN writer or the owner (`jaytipargl.jp`):
+     ```bash
+     rclone config create jtagent_tan drive \
+       scope=drive root_folder_id=1ondyw5YrwXpE6jV48nYpRlg4Z1QkZWUB
+     # follow the browser OAuth prompt; then verify:
+     rclone lsd jtagent_tan:
+     ```
    (Base model is downloaded from HF, not Drive — no need to stage 15 GB.)
 
 ---

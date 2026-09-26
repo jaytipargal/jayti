@@ -62,6 +62,32 @@ def test_drive_sync_mount_writes_folder_only_config(tmp_path: Path, monkeypatch)
     assert marker["full_drive_mount"] is False
 
 
+def test_write_rclone_config_uses_service_account_when_set(tmp_path: Path, monkeypatch):
+    conf = tmp_path / "rclone.conf"
+    monkeypatch.setenv("RCLONE_CONFIG", str(conf))
+    key = tmp_path / "sa.json"
+    key.write_text("{}", encoding="utf-8")
+    monkeypatch.setenv("RCLONE_DRIVE_SERVICE_ACCOUNT_FILE", str(key))
+    # A stale OAuth token must not be written alongside the service account.
+    monkeypatch.setenv("RCLONE_DRIVE_TOKEN", '{"access_token":"stale"}')
+    drive_sync.write_rclone_config(drive_sync.DEFAULT_FOLDER_ID)
+    text = conf.read_text(encoding="utf-8")
+    assert f"service_account_file = {key}" in text
+    assert "token =" not in text
+    assert "root_folder_id = 1ondyw5YrwXpE6jV48nYpRlg4Z1QkZWUB" in text
+
+
+def test_write_rclone_config_falls_back_to_oauth_token(tmp_path: Path, monkeypatch):
+    conf = tmp_path / "rclone.conf"
+    monkeypatch.setenv("RCLONE_CONFIG", str(conf))
+    monkeypatch.delenv("RCLONE_DRIVE_SERVICE_ACCOUNT_FILE", raising=False)
+    monkeypatch.setenv("RCLONE_DRIVE_TOKEN", '{"access_token":"t"}')
+    drive_sync.write_rclone_config(drive_sync.DEFAULT_FOLDER_ID)
+    text = conf.read_text(encoding="utf-8")
+    assert 'token = {"access_token":"t"}' in text
+    assert "service_account_file" not in text
+
+
 def test_segment_jsonl_seed_fallback(tmp_path: Path, monkeypatch):
     monkeypatch.delenv("EKA_DEVICE_ID", raising=False)
     monkeypatch.delenv("EKA_DEVICE_KEY", raising=False)
