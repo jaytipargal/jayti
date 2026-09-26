@@ -132,6 +132,24 @@ bash /path/to/jayti/sandbox/jtagent/edge_deploy/s24/termux-run.sh ~/storage/jt-a
 
 ---
 
+## Phase D — optional: jtagent via the Claude Agent SDK
+
+`jtagent_sdk_agent.py` runs jtagent as a Claude-backed agent (`claude-sonnet-5`)
+locked to one tool, `search_personal_context`, over the redacted
+`training/<category>/*.jsonl` corpus, with no Bash/Read/Write. It complements the
+GGUF path above rather than replacing it. `JTAGENT.ipynb` has a cell for it.
+
+```bash
+pip install claude-agent-sdk anyio
+npm i -g @anthropic-ai/claude-code      # the SDK spawns the Claude Code CLI (needs Node.js)
+export ANTHROPIC_API_KEY=sk-ant-...     # an Anthropic key, NOT the EKA_* device.env keys
+python sandbox/jtagent/jtagent_sdk_agent.py "what devices are registered for jtagent?"
+```
+Point it at a corpus copy with `JTAGENT_CORPUS_DIR=/path/to/training`. With no
+corpus it says so instead of guessing.
+
+---
+
 ## Feeding new data (optional, before Phase A)
 
 To train on fresh device data instead of the seed set, push from each device
