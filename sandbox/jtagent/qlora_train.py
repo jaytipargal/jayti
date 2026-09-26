@@ -95,6 +95,9 @@ def build_config(overrides: dict | None = None) -> dict:
         "lora_dropout": _float("JTAGENT_LORA_DROPOUT", 0.05),
         "learning_rate": _float("JTAGENT_LR", 2e-4),
         "epochs": _int("JTAGENT_EPOCHS", 3),
+        "max_steps": _int("JTAGENT_MAX_STEPS", -1),
+        "save_steps": _int("JTAGENT_SAVE_STEPS", 200),
+        "save_total_limit": _int("JTAGENT_SAVE_TOTAL_LIMIT", 2),
         "batch_size": _int("JTAGENT_BATCH", 1),
         "grad_accum": _int("JTAGENT_GRAD_ACCUM", 16),
         "max_seq_len": _int("JTAGENT_MAX_SEQ", 2048),
@@ -228,6 +231,7 @@ def train_qlora(
             AutoModelForCausalLM,
             AutoTokenizer,
             BitsAndBytesConfig,
+            DataCollatorForLanguageModeling,
             Trainer,
             TrainingArguments,
         )
@@ -242,6 +246,15 @@ def train_qlora(
     tokenizer = AutoTokenizer.from_pretrained(cfg["base_model"], trust_remote_code=True)
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
+    # DataCollatorForLanguageModeling masks pad_token_id in the labels. If pad and
+    # eos share an id, real end-of-turn tokens get masked out of the loss and the
+    # model never learns to stop. Qwen2.5 ships a distinct pad (<|endoftext|>) vs
+    # eos (<|im_end|>); surface the ids so any drift is caught in the log.
+    print(f"pad={tokenizer.pad_token!r}({tokenizer.pad_token_id}) "
+          f"eos={tokenizer.eos_token!r}({tokenizer.eos_token_id})")
+    if tokenizer.pad_token_id == tokenizer.eos_token_id:
+        print("WARNING: pad_token_id == eos_token_id — eos will be masked from the "
+              "loss. Add a distinct pad token before training for-real.")
 
     quant_config = None
     if cfg["load_in_4bit"] and has_gpu:
@@ -282,33 +295,58 @@ def train_qlora(
     dataset = Dataset.from_list(rows).map(_render)
 
     def _tokenize(ex):
-        toks = tokenizer(
+        # No padding and no labels here. The data collator pads each batch to its
+        # longest row and sets labels with pad positions masked to -100, so loss
+        # is never spent predicting <pad> (previously it padded every row to
+        # max_seq_len and labelled the pad tokens, diluting the signal).
+        return tokenizer(
             ex["text"],
             truncation=True,
             max_length=cfg["max_seq_len"],
-            padding="max_length",
+            padding=False,
         )
-        toks["labels"] = toks["input_ids"].copy()
-        return toks
 
     tokenized = dataset.map(_tokenize, remove_columns=dataset.column_names)
 
     out_dir.parent.mkdir(parents=True, exist_ok=True)
-    args = TrainingArguments(
+    args_kwargs = dict(
         output_dir=str(out_dir.parent),
         num_train_epochs=cfg["epochs"],
         per_device_train_batch_size=cfg["batch_size"],
         gradient_accumulation_steps=cfg["grad_accum"],
         learning_rate=cfg["learning_rate"],
         logging_steps=5,
-        save_total_limit=1,
+        save_strategy="steps",
+        save_steps=cfg["save_steps"],
+        save_total_limit=cfg["save_total_limit"],
         report_to="none",
         bf16=has_gpu,
         gradient_checkpointing=True,
         remove_unused_columns=False,
         dataloader_pin_memory=False,
     )
-    Trainer(model=model, args=args, train_dataset=tokenized).train()
+    # max_steps > 0 overrides num_train_epochs (HF Trainer semantics).
+    if int(cfg.get("max_steps", -1)) > 0:
+        args_kwargs["max_steps"] = int(cfg["max_steps"])
+    args = TrainingArguments(**args_kwargs)
+
+    # Resume from the newest checkpoint-<N> under output_dir, if any exist.
+    resume = None
+    ckpts = [p for p in out_dir.parent.glob("checkpoint-*") if p.is_dir()]
+    if ckpts:
+        resume = str(max(ckpts, key=lambda p: int(p.name.rsplit("-", 1)[-1])
+                         if p.name.rsplit("-", 1)[-1].isdigit() else -1))
+        print(f"RESUME_FROM_CHECKPOINT: {resume}")
+
+    # mlm=False → causal LM: collator dynamically pads each batch and masks pad
+    # tokens in the labels (-100), requiring a pad token distinct from eos.
+    data_collator = DataCollatorForLanguageModeling(tokenizer, mlm=False)
+    Trainer(
+        model=model,
+        args=args,
+        train_dataset=tokenized,
+        data_collator=data_collator,
+    ).train(resume_from_checkpoint=resume)
 
     model.save_pretrained(str(out_dir))
     tokenizer.save_pretrained(str(out_dir))
