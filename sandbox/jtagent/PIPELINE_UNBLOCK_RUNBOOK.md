@@ -94,4 +94,4 @@ This requires network path/cert remediation from the Lenovo/Windows side and MCP
 
 ### rclone replication
 
-Drive publish is active through `rclone copy ... jtagent_tan:jtagent` from this VM. To switch auth principal to `info@kailash-ai.com`, complete `rclone config reconnect jtagent_tan` with that account in browser.
+Drive publish is active through `rclone copy ... jtagent_tan:jtagent` from this VM. To switch auth principal to `info@kailash-ai.com`, either complete `rclone config reconnect jtagent_tan` with that account in browser, or — headless — use a service account from that project: share the TAN folder with the SA's email and set `RCLONE_DRIVE_SERVICE_ACCOUNT_FILE=<key.json>` (see `edge_deploy/configure_rclone_sa.sh`).

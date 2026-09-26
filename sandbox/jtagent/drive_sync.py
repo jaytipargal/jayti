@@ -104,6 +104,15 @@ def write_rclone_config(folder_id: str) -> Path:
         os.environ.get("RCLONE_DRIVE_CLIENT_SECRET", "").strip()
         or existing.get("client_secret", "")
     )
+    # Headless auth: a Google Cloud service-account key (the kailash-ai project's
+    # Drive API) lets devices/VMs pull without any browser OAuth. When set it
+    # replaces the OAuth token — rclone ignores a token next to an SA, and a
+    # stale one only confuses `rclone config reconnect`. The SA's email must be
+    # shared on the TAN folder (reader is enough to pull).
+    service_account_file = (
+        os.environ.get("RCLONE_DRIVE_SERVICE_ACCOUNT_FILE", "").strip()
+        or existing.get("service_account_file", "")
+    )
 
     lines = [
         f"[{REMOTE_NAME}]",
@@ -116,12 +125,15 @@ def write_rclone_config(folder_id: str) -> Path:
         lines.append(f"client_id = {client_id}")
     if client_secret:
         lines.append(f"client_secret = {client_secret}")
-    if token:
+    if service_account_file:
+        lines.append(f"service_account_file = {service_account_file}")
+    elif token:
         # token must be JSON on one line for rclone
         lines.append(f"token = {token}")
     conf.write_text("\n".join(lines) + "\n", encoding="utf-8")
     os.chmod(conf, 0o600)
-    print(f"wrote rclone config -> {conf} (root_folder_id={folder_id})")
+    auth = "service_account" if service_account_file else ("oauth_token" if token else "none")
+    print(f"wrote rclone config -> {conf} (root_folder_id={folder_id}, auth={auth})")
     return conf
 
 
@@ -210,8 +222,10 @@ def cmd_pull(folder_id: str, local_root: Path) -> int:
     except (subprocess.CalledProcessError, FileNotFoundError) as exc:
         print(f"rclone pull failed: {exc}")
         print(
-            "Need Drive OAuth: set RCLONE_DRIVE_TOKEN or run "
-            f"`rclone config reconnect {REMOTE_NAME}:` once on this VM / Colab."
+            "Need Drive auth: set RCLONE_DRIVE_SERVICE_ACCOUNT_FILE (headless: a "
+            "GCloud service-account key whose email is shared on the TAN folder), "
+            f"or set RCLONE_DRIVE_TOKEN, or run `rclone config reconnect {REMOTE_NAME}:` "
+            "once on this VM / Colab."
         )
         return 1
     # Drop any skipped leftovers if copied somehow
