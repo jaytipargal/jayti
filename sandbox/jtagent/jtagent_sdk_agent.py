@@ -136,14 +136,33 @@ async def search_personal_context(args: dict) -> dict:
     return {"content": [{"type": "text", "text": "\n".join(lines)}]}
 
 
+# Built-in tools denied as a second line of defence; `tools=[]` is what removes them.
+DENIED_BUILTIN_TOOLS = [
+    "Bash", "Read", "Write", "Edit", "MultiEdit", "NotebookEdit",
+    "Glob", "Grep", "WebSearch", "WebFetch", "Task", "Agent",
+]
+
+
 def build_options() -> ClaudeAgentOptions:
+    """Options that confine the agent to its one retrieval tool.
+
+    `allowed_tools` only auto-approves a tool; it does not restrict the tool set.
+    The restriction comes from `tools=[]` (the CLI gets `--tools ""`, so no
+    built-in tool is available), `strict_mcp_config` (only this in-process
+    server, not MCP servers configured on the device) and `setting_sources=[]`
+    (no user/project/local settings, so no device hooks or allow rules). No
+    permission bypass is needed because the only tool is pre-approved.
+    """
     server = create_sdk_mcp_server("jtagent", "1.0.0", tools=[search_personal_context])
     return ClaudeAgentOptions(
         system_prompt=SYSTEM_PROMPT,
         model=MODEL,
         mcp_servers={"jtagent": server},
+        strict_mcp_config=True,
+        setting_sources=[],
+        tools=[],
         allowed_tools=["mcp__jtagent__search_personal_context"],
-        permission_mode="bypassPermissions",
+        disallowed_tools=DENIED_BUILTIN_TOOLS,
         max_turns=8,
     )
 

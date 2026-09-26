@@ -59,10 +59,44 @@ def _search(mod, **args):
 
 def test_options_lock_agent_to_single_retrieval_tool(agent):
     opts = agent.build_options()
+    # allowed_tools alone only auto-approves; these are what actually restrict.
+    assert opts.tools == []
+    assert opts.strict_mcp_config is True
+    assert opts.setting_sources == []
+    assert {"Bash", "Read", "Write", "Edit", "WebFetch"} <= set(opts.disallowed_tools)
+    assert getattr(opts, "permission_mode", None) is None
     assert opts.allowed_tools == ["mcp__jtagent__search_personal_context"]
     assert list(opts.mcp_servers) == ["jtagent"]
     assert opts.model == agent.MODEL
     assert "never claim a device is online without evidence" in opts.system_prompt
+
+
+def test_real_sdk_cli_flags_remove_builtin_tools():
+    """Check the command the real SDK would launch, not just the options object.
+
+    Skipped where the SDK or the Claude Code CLI isn't installed (e.g. CI).
+    """
+    import shutil
+
+    pytest.importorskip("claude_agent_sdk")
+    cli = shutil.which("claude")
+    if cli is None:
+        pytest.skip("Claude Code CLI not installed")
+    try:
+        from claude_agent_sdk._internal.transport.subprocess_cli import SubprocessCLITransport
+    except ImportError:
+        pytest.skip("SDK transport layout changed")
+    spec = importlib.util.spec_from_file_location("jtagent_sdk_agent_real", AGENT)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    transport = SubprocessCLITransport(prompt="hi", options=mod.build_options())
+    transport._cli_path = cli
+    cmd = transport._build_command()
+    assert cmd[cmd.index("--tools") + 1] == ""               # no built-in tools at all
+    assert cmd[cmd.index("--allowedTools") + 1] == "mcp__jtagent__search_personal_context"
+    assert "--strict-mcp-config" in cmd
+    assert "--setting-sources=" in cmd                         # no device settings/hooks
+    assert "bypassPermissions" not in cmd
 
 
 def test_search_ranks_matches_and_skips_pad_rows(agent):
