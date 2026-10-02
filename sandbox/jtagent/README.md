@@ -57,6 +57,11 @@ Operator helpers committed in this repo:
 
 ## QLoRA path (7-8B → GGUF) — capable model for the devices
 
+For a T4-safe bounded training run, open `JTAGENT_T4_FAST.ipynb` and execute
+its cells in order. It samples 2,000 rows, runs 250 optimizer steps with
+FP16/4-bit QLoRA, and archives the adapter to Drive before optional export.
+Use the A100 flow below only when the full GGUF pipeline is required.
+
 The GPT-2 LoRA path above stays as the light VPS responder. For a capable
 assistant that runs on the VivoBook, fine-tune a real trainable base and export
 GGUF (needs Colab Pro **A100**; the 29.5 GB `go4garage01/jt-agent-model` is an

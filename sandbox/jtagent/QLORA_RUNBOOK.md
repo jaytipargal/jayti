@@ -32,8 +32,11 @@ accounts/hardware; none of it runs from CI.
 
 ## Phase A — Colab: train → GGUF → Drive (→ HF)
 
-Either run the notebook `sandbox/jtagent/jtagent_colab.ipynb` top-to-bottom (the
-last cell runs the full E2E), **or** these exact cells on a fresh A100 runtime:
+For a T4, use `sandbox/jtagent/JTAGENT_T4_FAST.ipynb` top-to-bottom. It uses a
+bounded 2,000-row, 250-step run and archives the adapter to Drive before any
+export step. The older `jtagent_colab.ipynb` full E2E path is for an A100.
+
+For a full A100 run, use these exact cells:
 
 ```python
 # A1 — repo + llama.cpp (build the quantizer; convert script is pure-python)

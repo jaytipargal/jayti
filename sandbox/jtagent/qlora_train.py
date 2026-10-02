@@ -241,6 +241,7 @@ def train_qlora(
         return result
 
     has_gpu = bool(getattr(torch, "cuda", None) and torch.cuda.is_available())
+    has_bf16 = has_gpu and torch.cuda.is_bf16_supported()
     print(f"cuda={has_gpu} base={cfg['base_model']} rows={len(rows)}")
 
     tokenizer = AutoTokenizer.from_pretrained(cfg["base_model"], trust_remote_code=True)
@@ -261,15 +262,17 @@ def train_qlora(
         quant_config = BitsAndBytesConfig(
             load_in_4bit=True,
             bnb_4bit_quant_type="nf4",
-            bnb_4bit_compute_dtype=torch.bfloat16,
+            # T4 GPUs do not support BF16.  FP16 keeps 4-bit QLoRA compatible
+            # there, while newer GPUs retain BF16 compute.
+            bnb_4bit_compute_dtype=torch.bfloat16 if has_bf16 else torch.float16,
             bnb_4bit_use_double_quant=True,
         )
 
     model = AutoModelForCausalLM.from_pretrained(
         cfg["base_model"],
         quantization_config=quant_config,
-        device_map="auto" if has_gpu else None,
-        torch_dtype=torch.bfloat16 if has_gpu else torch.float32,
+        device_map={"": 0} if has_gpu else None,
+        torch_dtype=torch.bfloat16 if has_bf16 else (torch.float16 if has_gpu else torch.float32),
         trust_remote_code=True,
     )
     model.config.use_cache = False
@@ -320,7 +323,8 @@ def train_qlora(
         save_steps=cfg["save_steps"],
         save_total_limit=cfg["save_total_limit"],
         report_to="none",
-        bf16=has_gpu,
+        bf16=has_bf16,
+        fp16=has_gpu and not has_bf16,
         gradient_checkpointing=True,
         remove_unused_columns=False,
         dataloader_pin_memory=False,
