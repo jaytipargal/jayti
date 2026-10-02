@@ -59,6 +59,10 @@ RETRIEVAL_URL = os.environ.get("RETRIEVAL_URL", "http://127.0.0.1:8444").rstrip(
 HUB_URL = os.environ.get("HUB_URL", "http://127.0.0.1:8443").rstrip("/")
 ADAPTER_DIR = os.environ.get("JTAGENT_ADAPTER", "")
 GENERATE = os.environ.get("JTAGENT_GENERATE", "1") == "1"
+# A fresh deployment starts with an empty retrieval index.  Keep the trained
+# adapter usable in that state; deployments with a retrieval index still add
+# its evidence to the prompt and response.
+GENERATE_WITHOUT_HITS = os.environ.get("JTAGENT_GENERATE_WITHOUT_HITS", "1") == "1"
 AGENT_NAME = "jtagent"
 
 app = FastAPI(title="jtagent", version="0.1.0")
@@ -284,7 +288,7 @@ async def query(
     # Generation: GPT-2 + LoRA over the evidence (optional).
     gen_ms = 0.0
     draft = None
-    if hits or not req.use_rag:
+    if hits or not req.use_rag or GENERATE_WITHOUT_HITS:
         context = "\n".join(f"[{s['n']}] {s['snippet']}" for s in source_docs[:3])
         prompt = f"Jayti data:\n{context}\n\nQuestion: {q}\nAnswer:"
         t0 = time.time()
